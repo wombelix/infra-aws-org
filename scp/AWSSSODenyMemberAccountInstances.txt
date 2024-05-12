@@ -1,0 +1,4 @@
+Name: AWSSSODenyMemberAccountInstances
+Policy type: Service control policy (customer managed)
+Description: Prevent creation of new account instances of IAM Identity Center
+Targets: Root
