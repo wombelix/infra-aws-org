@@ -36,6 +36,7 @@ Resources:
 
   # Prevents member accounts from leaving the organization
   # Why: Essential security control to prevent unauthorized account removal
+  # Reference: https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_policies_scps_examples.html#example-deny-leave-org
   SCPDenyLeaveOrganization:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
@@ -43,6 +44,9 @@ Resources:
     Properties:
       Type: SERVICE_CONTROL_POLICY
       Name: SCPDenyLeaveOrganization
+      Description: |
+        Deny the ability for member accounts to leave the organization. Essential security control to prevent unauthorized account removal.
+        See: https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_policies_scps_examples.html#example-deny-leave-org
       Content:
         Version: 2012-10-17
         Statement:
@@ -56,6 +60,7 @@ Resources:
 
   # Restricts all AWS resources to EU regions only (eu-central-1, eu-west-1)
   # Why: Data sovereignty compliance and cost optimization through regional focus
+  # Reference: https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_policies_scps_examples.html#example-deny-regions
   DenyAllResourcesOutsideEU:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
@@ -63,7 +68,10 @@ Resources:
     Properties:
       Type: SERVICE_CONTROL_POLICY
       Name: DenyAllResourcesOutsideEU
-      Description: Except global services, deny all resource creation in Regions outside eu-central-1 and eu-west-1
+      Description: |
+        Except for global services, deny all resource creation in regions outside eu-central-1 and eu-west-1.
+        Enforces data sovereignty and cost optimization through regional focus.
+        See: https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_policies_scps_examples.html#example-deny-regions
       Content:
         Version: 2012-10-17
         Statement:
@@ -117,6 +125,39 @@ Resources:
                   - eu-west-1
       TargetIds:
         - !Ref OrganizationRootId
+  # Deny deletion of default CloudWatch log groups and the default CloudTrail S3 bucket
+  # Why: Ensures audit and operational logs are not accidentally or maliciously deleted
+  # Reference: https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/iam-access-control-overview-cwl.html#CWL_ARN_Format
+  ProtectDefaultLogGroupsAndBuckets:
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Type: AWS::Organizations::Policy
+    Properties:
+      Type: SERVICE_CONTROL_POLICY
+      Name: ProtectDefaultLogGroupsAndBuckets
+      Description: |
+        Deny deletion of default CloudWatch log groups and the default CloudTrail S3 bucket.
+        This protects log groups for Lambda, CloudTrail, and EventBridge, and S3 buckets matching the CloudTrail default naming pattern.
+        See: https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/iam-access-control-overview-cwl.html#CWL_ARN_Format
+      Content:
+        Version: 2012-10-17
+        Statement:
+          - Sid: DenyDeleteDefaultCloudWatchLogGroups
+            Effect: Deny
+            Action:
+              - logs:DeleteLogGroup
+            Resource:
+              - arn:aws:logs:*:*:log-group:/aws/lambda/*
+              - arn:aws:logs:*:*:log-group:/aws/cloudtrail/*
+              - arn:aws:logs:*:*:log-group:/aws/events/*
+          - Sid: DenyDeleteDefaultCloudTrailBucket
+            Effect: Deny
+            Action:
+              - s3:DeleteBucket
+            Resource:
+              - arn:aws:s3:::aws-cloudtrail-logs-*
+      TargetIds:
+        - !Ref OrganizationRootId
 
   # Organization-wide tagging standards for cost tracking and resource management
   # Why: Enables cost allocation, resource tracking, and automated governance
@@ -127,7 +168,9 @@ Resources:
     Properties:
       Type: TAG_POLICY
       Name: BasicTaggingStandards
-      Description: Organization-wide tagging standards for cost tracking and resource management
+      Description: |
+        Organization-wide tagging standards for cost tracking and resource management.
+        See: https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_policies_tag-policies.html
       Content:
         tags:
           purpose:
@@ -188,7 +231,9 @@ Resources:
     Properties:
       Type: SERVICE_CONTROL_POLICY
       Name: RootUserDenyAllExceptActionsThatRequireRootAccess
-      Description: SCP to restrict root user in your member accounts
+      Description: |
+        SCP to restrict root user in your member accounts, allowing only essential actions that require root privileges.
+        See: https://docs.aws.amazon.com/organizations/latest/userguide/best-practices_member-acct.html#bp_member-acct_use-scp
       Content:
         Version: 2012-10-17
         Statement:
@@ -213,7 +258,9 @@ Resources:
     Properties:
       Type: SERVICE_CONTROL_POLICY
       Name: DenyAccountManagementActions
-      Description: Prevent unauthorized account management and organization changes
+      Description: |
+        Prevent unauthorized account management and organization changes.
+        See: https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_policies_scps_examples.html#example-deny-account-management
       Content:
         Version: 2012-10-17
         Statement:
@@ -250,7 +297,9 @@ Resources:
     Properties:
       Type: SERVICE_CONTROL_POLICY
       Name: DenyHighRiskActions
-      Description: Block high-risk security actions that could compromise the organization
+      Description: |
+        Block high-risk security actions that could compromise the organization.
+        See: https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_policies_scps_examples.html#example-deny-delete-security-controls
       Content:
         Version: 2012-10-17
         Statement:
@@ -282,7 +331,9 @@ Resources:
     Properties:
       Type: SERVICE_CONTROL_POLICY
       Name: AWSSSODenyMemberAccountInstances
-      Description: Prevent creation of new account instances of IAM Identity Center
+      Description: |
+        Prevent creation of new account instances of IAM Identity Center.
+        See: https://docs.aws.amazon.com/singlesignon/latest/userguide/what-is.html#sso-accounts
       Content:
         Version: 2012-10-17
         Statement:
@@ -303,7 +354,9 @@ Resources:
     Properties:
       Type: SERVICE_CONTROL_POLICY
       Name: ProtectCloudTrail
-      Description: Protect CloudTrail from deletion or modification
+      Description: |
+        Protect CloudTrail from deletion or modification.
+        See: https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-best-practices.html
       Content:
         Version: 2012-10-17
         Statement:
@@ -331,7 +384,9 @@ Resources:
     Properties:
       Type: SERVICE_CONTROL_POLICY
       Name: DenyRunInstances
-      Description: Block all EC2 instance launches
+      Description: |
+        Block all EC2 instance launches to enforce serverless-first architecture and prevent unexpected compute costs.
+        See: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-best-practices.html
       Content:
         Version: 2012-10-17
         Statement:
@@ -352,7 +407,9 @@ Resources:
     Properties:
       Type: DECLARATIVE_POLICY_EC2
       Name: EC2SecurityDefaults
-      Description: Enforce EC2 security defaults - disable serial console, block public images/snapshots, require IMDSv2
+      Description: |
+        Enforce EC2 security defaults - disable serial console, block public images/snapshots, require IMDSv2.
+        See: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-best-practices.html
       Content:
         ec2_attributes:
           serial_console_access:
@@ -399,7 +456,9 @@ Resources:
     Properties:
       Type: RESOURCE_CONTROL_POLICY
       Name: ResourceControlPolicies
-      Description: Comprehensive resource control policies for security and compliance
+      Description: |
+        Comprehensive resource control policies for security and compliance (encryption, secure transport, org-only access, OIDC restrictions).
+        See: https://docs.aws.amazon.com/IAM/latest/UserGuide/best-practices.html
       Content:
         Version: 2012-10-17
         Statement:
@@ -491,7 +550,9 @@ Resources:
     Properties:
       Type: SERVICE_CONTROL_POLICY
       Name: DenyHighCostLambdaFeatures
-      Description: Restrict high-cost Lambda features - allow only pay-per-use services (on-demand, standard execution)
+      Description: |
+        Restrict high-cost Lambda features - allow only pay-per-use services (on-demand, standard execution).
+        See: https://docs.aws.amazon.com/lambda/latest/dg/best-practices.html
       Content:
         Version: 2012-10-17
         Statement:
@@ -536,7 +597,9 @@ Resources:
     Properties:
       Type: SERVICE_CONTROL_POLICY
       Name: DenyHighCostDynamoDBFeatures
-      Description: Restrict high-cost DynamoDB features - allow only on-demand capacity mode and basic operations
+      Description: |
+        Restrict high-cost DynamoDB features - allow only on-demand capacity mode and basic operations.
+        See: https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/best-practices.html
       Content:
         Version: 2012-10-17
         Statement:
@@ -582,7 +645,9 @@ Resources:
     Properties:
       Type: SERVICE_CONTROL_POLICY
       Name: DenyHighCostAPIGatewayFeatures
-      Description: Force usage of HTTP APIs by blocking REST APIs and Private APIs
+      Description: |
+        Force usage of HTTP APIs by blocking REST APIs and Private APIs for cost optimization.
+        See: https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api.html
       Content:
         Version: 2012-10-17
         Statement:
@@ -623,7 +688,9 @@ Resources:
     Properties:
       Type: SERVICE_CONTROL_POLICY
       Name: DenyHighCostStepFunctionsFeatures
-      Description: Force Express Workflows and block compute-heavy integrations to maintain serverless cost model
+      Description: |
+        Force Express Workflows and block compute-heavy integrations to maintain serverless cost model.
+        See: https://docs.aws.amazon.com/step-functions/latest/dg/concepts-standard-vs-express.html
       Content:
         Version: 2012-10-17
         Statement:
@@ -666,7 +733,9 @@ Resources:
     Properties:
       Type: SERVICE_CONTROL_POLICY
       Name: DenyHighCostEventBridgeFeatures
-      Description: Block EventBridge features with storage costs while allowing pay-per-event usage
+      Description: |
+        Block EventBridge features with storage costs while allowing pay-per-event usage.
+        See: https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-archive-replay.html
       Content:
         Version: 2012-10-17
         Statement:
@@ -699,7 +768,9 @@ Resources:
     Properties:
       Type: SERVICE_CONTROL_POLICY
       Name: DenyHighCostCloudWatchFeatures
-      Description: Restrict high-cost CloudWatch features to prevent accidental charges
+      Description: |
+        Restrict high-cost CloudWatch features to prevent accidental charges.
+        See: https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/best-practices.html
       Content:
         Version: 2012-10-17
         Statement:
@@ -762,7 +833,9 @@ Resources:
     Properties:
       Type: SERVICE_CONTROL_POLICY
       Name: DenyHighCostBedrockFeatures
-      Description: Restrict high-cost Bedrock features - allow only pay-per-use services (on-demand, batch)
+      Description: |
+        Restrict high-cost Bedrock features - allow only pay-per-use services (on-demand, batch).
+        See: https://docs.aws.amazon.com/bedrock/latest/userguide/best-practices.html
       Content:
         Version: 2012-10-17
         Statement:
@@ -831,7 +904,9 @@ Resources:
     Properties:
       Type: SERVICE_CONTROL_POLICY
       Name: DenyExpensiveDatabaseServices
-      Description: Block expensive database and compute services with monthly minimums - force true pay-per-use serverless
+      Description: |
+        Block expensive database and compute services with monthly minimums - force true pay-per-use serverless.
+        See: https://docs.aws.amazon.com/whitepapers/latest/serverless-architectures-lambda/serverless-architectures-lambda.pdf
       Content:
         Version: 2012-10-17
         Statement:
@@ -921,7 +996,9 @@ Resources:
     Properties:
       Type: SERVICE_CONTROL_POLICY
       Name: DenyExpensiveStorageFeatures
-      Description: Block expensive storage features with provisioned capacity or hourly charges
+      Description: |
+        Block expensive storage features with provisioned capacity or hourly charges.
+        See: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/EBSVolumeTypes.html
       Content:
         Version: 2012-10-17
         Statement:
@@ -960,7 +1037,9 @@ Resources:
     Properties:
       Type: SERVICE_CONTROL_POLICY
       Name: DenyExpensiveNetworkingFeatures
-      Description: Block expensive networking features with hourly charges
+      Description: |
+        Block expensive networking features with hourly charges.
+        See: https://docs.aws.amazon.com/vpc/latest/userguide/vpc-endpoints.html
       Content:
         Version: 2012-10-17
         Statement:
@@ -996,7 +1075,9 @@ Resources:
     Properties:
       Type: SERVICE_CONTROL_POLICY
       Name: DenyExpensiveAnalyticsAndMessaging
-      Description: Block expensive analytics and messaging services with hourly charges
+      Description: |
+        Block expensive analytics and messaging services with hourly charges.
+        See: https://docs.aws.amazon.com/glue/latest/dg/dev-endpoint.html
       Content:
         Version: 2012-10-17
         Statement:
@@ -1032,7 +1113,9 @@ Resources:
     Properties:
       Type: SERVICE_CONTROL_POLICY
       Name: DenySecurityHubActions
-      Description: Prevent Security Hub usage across all accounts to avoid costs
+      Description: |
+        Prevent Security Hub usage across all accounts to avoid costs.
+        See: https://docs.aws.amazon.com/securityhub/latest/userguide/what-is-securityhub.html
       Content:
         Version: 2012-10-17
         Statement:
@@ -1058,7 +1141,9 @@ Resources:
     Properties:
       Type: AISERVICES_OPT_OUT_POLICY
       Name: OptOutAllAIServices
-      Description: Opt-Out by default, allow child OUs to override
+      Description: |
+        Opt-Out by default, allow child OUs to override.
+        See: https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_policies_ai-opt-out.html
       Content:
         services:
           default:
@@ -1080,7 +1165,9 @@ Resources:
     Properties:
       Type: CHATBOT_POLICY
       Name: DisableChimeTeamsSlackAccessToAccounts
-      Description: Disables AWS Chatbot access for Chime, Microsoft Teams, and Slack platforms across all accounts
+      Description: |
+        Disables AWS Chatbot access for Chime, Microsoft Teams, and Slack platforms across all accounts.
+        See: https://docs.aws.amazon.com/chatbot/latest/adminguide/what-is.html
       Content:
         chatbot:
           platforms:
