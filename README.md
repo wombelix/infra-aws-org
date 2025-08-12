@@ -1,21 +1,37 @@
 <!--
 SPDX-FileCopyrightText: 2025 Dominik Wombacher <dominik@wombacher.cc>
 
-SPDX-License-Identifier: CC0-1.0
+SPDX-License-Identifier: MIT-0
 -->
 
-# AWS Organization policies
-
-Copy of applied SCP and settings in my AWS Organization.
+# Infrastructure AWS Organizations
 
 [![REUSE status](https://api.reuse.software/badge/git.sr.ht/~wombelix/aws-organizations-policies)](https://api.reuse.software/info/git.sr.ht/~wombelix/aws-organizations-policies)
 [![builds.sr.ht status](https://builds.sr.ht/~wombelix/aws-organizations-policies.svg)](https://builds.sr.ht/~wombelix/aws-organizations-policies?)
 
 ## Table of Contents
 
+* [Usage](#usage)
 * [Source](#source)
 * [Contribute](#contribute)
 * [License](#license)
+
+## Usage
+
+A one-time manual setup is required to create the IAM role that
+CloudFormation will use for deployments.
+
+1. Run the bootstrap script with permissions to create IAM Roles
+   and Policies in your AWS Organizations Management Account:
+   `./create-cfn-iam-role.sh`
+
+1. Copy the output **Role ARN**. later needed when configuring
+   the CloudFormation Stack.
+
+Manually create a CloudFormation stack with the **Sync from Git**
+option in the AWS console. Use the **Role ARN** from the script
+output as the `IAM execution role`. Has to point to the repo mirror
+on GitHub and to use `cfn-stack.yaml` as entrypoint.
 
 ## Source
 
