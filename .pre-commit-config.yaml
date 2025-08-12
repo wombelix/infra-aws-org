@@ -30,3 +30,9 @@ repos:
       hooks:
         - id: cfn-lint
           files: cfn-aws-orgs.yaml
+  -   repo: https://github.com/shellcheck-py/shellcheck-py
+      rev: v0.10.0.1
+      hooks:
+        - id: shellcheck
+          args:
+            - -x
