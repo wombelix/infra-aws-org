@@ -25,3 +25,8 @@ repos:
       rev: v4.1.0
       hooks:
         -   id: commitizen
+  -   repo: https://github.com/aws-cloudformation/cfn-lint
+      rev: v1.38.2
+      hooks:
+        - id: cfn-lint
+          files: cfn-aws-orgs.yaml
