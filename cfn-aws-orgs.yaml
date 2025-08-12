@@ -1,0 +1,1380 @@
+# SPDX-FileCopyrightText: 2025 Dominik Wombacher <dominik@wombacher.cc>
+#
+# SPDX-License-Identifier: MIT-0
+
+AWSTemplateFormatVersion: '2010-09-09'
+Description: "AWS Organizations management - policies, budgets, and cost monitoring for governance and control"
+
+Parameters:
+  OrganizationRootId:
+    Type: String
+    Default: r-lp71
+    Description: "AWS Organizations root ID (e.g., r-xxxx)"
+
+  OrganizationId:
+    Type: String
+    Default: o-37w8eaobo2
+    Description: "AWS Organization ID (e.g., o-xxxxxxxxxx)"
+
+  GitHubRepos:
+    Type: CommaDelimitedList
+    Default: "wombelix/*"
+    Description: "GitHub repositories allowed for OIDC (format: org/repo or org/* for all repos)"
+
+  BudgetAlertEmails:
+    Type: CommaDelimitedList
+    Default: "dominik@wombacher.cc,dw@wombacher.it"
+    Description: Email addresses for budget and cost anomaly alerts
+
+
+
+Resources:
+  # =============================================================================
+  # FOUNDATIONAL GOVERNANCE POLICIES
+  # Core policies that establish basic organizational governance and compliance
+  # =============================================================================
+
+  # Prevents member accounts from leaving the organization
+  # Why: Essential security control to prevent unauthorized account removal
+  SCPDenyLeaveOrganization:
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Type: AWS::Organizations::Policy
+    Properties:
+      Type: SERVICE_CONTROL_POLICY
+      Name: SCPDenyLeaveOrganization
+      Content:
+        Version: 2012-10-17
+        Statement:
+          - Sid: SCPDenyLeaveOrganization
+            Effect: Deny
+            Action:
+              - 'organizations:LeaveOrganization'
+            Resource: '*'
+      TargetIds:
+        - !Ref OrganizationRootId
+
+  # Restricts all AWS resources to EU regions only (eu-central-1, eu-west-1)
+  # Why: Data sovereignty compliance and cost optimization through regional focus
+  DenyAllResourcesOutsideEU:
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Type: AWS::Organizations::Policy
+    Properties:
+      Type: SERVICE_CONTROL_POLICY
+      Name: DenyAllResourcesOutsideEU
+      Description: Except global services, deny all resource creation in Regions outside eu-central-1 and eu-west-1
+      Content:
+        Version: 2012-10-17
+        Statement:
+          - Sid: DenyAllOutsideEU
+            Effect: Deny
+            NotAction:
+              - 'a4b:*'
+              - 'aws-marketplace-management:*'
+              - 'aws-marketplace:*'
+              - 'aws-portal:*'
+              - 'budgets:*'
+              - 'ce:*'
+              - 'chime:*'
+              - 'cloudfront:*'
+              - 'config:*'
+              - 'cur:*'
+              - 'directconnect:*'
+              - 'ec2:DescribeRegions'
+              - 'ec2:DescribeTransitGateways'
+              - 'ec2:DescribeVpnGateways'
+              - 'fms:*'
+              - 'globalaccelerator:*'
+              - 'health:*'
+              - 'iam:*'
+              - 'importexport:*'
+              - 'mobileanalytics:*'
+              - 'networkmanager:*'
+              - 'organizations:*'
+              - 'pricing:*'
+              - 'route53:*'
+              - 'route53domains:*'
+              - 'route53-recovery-cluster:*'
+              - 'route53-recovery-control-config:*'
+              - 'route53-recovery-readiness:*'
+              - 's3:GetAccountPublic*'
+              - 's3:ListAllMyBuckets'
+              - 's3:ListMultiRegionAccessPoints'
+              - 's3:PutAccountPublic*'
+              - 'shield:*'
+              - 'support:*'
+              - 'trustedadvisor:*'
+              - 'waf-regional:*'
+              - 'waf:*'
+              - 'wafv2:*'
+              - 'wellarchitected:*'
+            Resource: '*'
+            Condition:
+              StringNotEquals:
+                'aws:RequestedRegion':
+                  - eu-central-1
+                  - eu-west-1
+      TargetIds:
+        - !Ref OrganizationRootId
+
+  # Organization-wide tagging standards for cost tracking and resource management
+  # Why: Enables cost allocation, resource tracking, and automated governance
+  BasicTaggingStandards:
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Type: AWS::Organizations::Policy
+    Properties:
+      Type: TAG_POLICY
+      Name: BasicTaggingStandards
+      Description: Organization-wide tagging standards for cost tracking and resource management
+      Content:
+        tags:
+          purpose:
+            tag_key:
+              '@@assign': Purpose
+              '@@operators_allowed_for_child_policies':
+                - '@@none'
+            tag_value:
+              '@@assign':
+                - Business
+                - Personal
+                - Experimental
+              '@@operators_allowed_for_child_policies':
+                - '@@none'
+          lifecycle:
+            tag_key:
+              '@@assign': Lifecycle
+              '@@operators_allowed_for_child_policies':
+                - '@@none'
+            tag_value:
+              '@@assign':
+                - Active
+                - Deprecated
+                - Retained
+              '@@operators_allowed_for_child_policies':
+                - '@@none'
+          environment:
+            tag_key:
+              '@@assign': Environment
+              '@@operators_allowed_for_child_policies':
+                - '@@none'
+          creator:
+            tag_key:
+              '@@assign': Creator
+              '@@operators_allowed_for_child_policies':
+                - '@@none'
+            tag_value:
+              '@@assign':
+                - OpenTofu
+                - Manual
+                - CloudFormation
+              '@@operators_allowed_for_child_policies':
+                - '@@none'
+      TargetIds:
+        - !Ref OrganizationRootId
+
+  # =============================================================================
+  # SECURITY AND ACCESS CONTROL POLICIES
+  # Policies that enforce security best practices and access restrictions
+  # =============================================================================
+
+  # Restricts root user access to only essential actions that require root privileges
+  # Why: Follows AWS security best practices to minimize root user usage
+  RootUserDenyAllExceptActionsThatRequireRootAccess:
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Type: AWS::Organizations::Policy
+    Properties:
+      Type: SERVICE_CONTROL_POLICY
+      Name: RootUserDenyAllExceptActionsThatRequireRootAccess
+      Description: SCP to restrict root user in your member accounts
+      Content:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Deny
+            NotAction:
+              - 's3:GetBucketPolicy'
+              - 's3:PutBucketPolicy'
+              - 's3:DeleteBucketPolicy'
+            Resource: '*'
+            Condition:
+              StringLike:
+                'aws:PrincipalArn': 'arn:aws:iam::*:root'
+      TargetIds:
+        - !Ref OrganizationRootId
+
+  # Prevents unauthorized account management and organization changes
+  # Why: Centralizes account management and prevents unauthorized billing access
+  DenyAccountManagementActions:
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Type: AWS::Organizations::Policy
+    Properties:
+      Type: SERVICE_CONTROL_POLICY
+      Name: DenyAccountManagementActions
+      Description: Prevent unauthorized account management and organization changes
+      Content:
+        Version: 2012-10-17
+        Statement:
+          - Sid: DenyBillingAccess
+            Effect: Deny
+            Action:
+              - 'aws-portal:*'
+              - 'budgets:*'
+              - 'ce:*'
+              - 'cur:*'
+            Resource: '*'
+          - Sid: DenyIAMUserCreation
+            Effect: Deny
+            Action:
+              - 'iam:CreateUser'
+              - 'iam:CreateAccessKey'
+            Resource: '*'
+          - Sid: DenyRootAccessKeys
+            Effect: Deny
+            Action:
+              - 'iam:CreateAccessKey'
+              - 'iam:DeleteAccessKey'
+              - 'iam:UpdateAccessKey'
+            Resource: 'arn:aws:iam::*:user/root'
+      TargetIds:
+        - !Ref OrganizationRootId
+
+  # Blocks high-risk security actions that could compromise the organization
+  # Why: Prevents accidental or malicious deletion of critical security controls
+  DenyHighRiskActions:
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Type: AWS::Organizations::Policy
+    Properties:
+      Type: SERVICE_CONTROL_POLICY
+      Name: DenyHighRiskActions
+      Description: Block high-risk security actions that could compromise the organization
+      Content:
+        Version: 2012-10-17
+        Statement:
+          - Sid: DenyConfigChanges
+            Effect: Deny
+            Action:
+              - 'config:DeleteConfigRule'
+              - 'config:DeleteConfigurationRecorder'
+              - 'config:DeleteDeliveryChannel'
+              - 'config:StopConfigurationRecorder'
+            Resource: '*'
+          - Sid: DenyGuardDutyChanges
+            Effect: Deny
+            Action:
+              - 'guardduty:DeleteDetector'
+              - 'guardduty:DeleteIPSet'
+              - 'guardduty:DeleteThreatIntelSet'
+              - 'guardduty:StopMonitoringMembers'
+            Resource: '*'
+      TargetIds:
+        - !Ref OrganizationRootId
+
+  # Prevents creation of new IAM Identity Center instances in member accounts
+  # Why: Centralizes identity management and prevents account sprawl
+  AWSSSODenyMemberAccountInstances:
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Type: AWS::Organizations::Policy
+    Properties:
+      Type: SERVICE_CONTROL_POLICY
+      Name: AWSSSODenyMemberAccountInstances
+      Description: Prevent creation of new account instances of IAM Identity Center
+      Content:
+        Version: 2012-10-17
+        Statement:
+          - Sid: DenyMemberAccountInstances
+            Effect: Deny
+            Action:
+              - 'sso:CreateInstance'
+            Resource: '*'
+      TargetIds:
+        - !Ref OrganizationRootId
+
+  # Protects CloudTrail from deletion or modification
+  # Why: Ensures audit logging cannot be disabled, maintaining compliance and security
+  ProtectCloudTrail:
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Type: AWS::Organizations::Policy
+    Properties:
+      Type: SERVICE_CONTROL_POLICY
+      Name: ProtectCloudTrail
+      Description: Protect CloudTrail from deletion or modification
+      Content:
+        Version: 2012-10-17
+        Statement:
+          - Sid: ProtectCloudTrail
+            Effect: Deny
+            Action:
+              - 'cloudtrail:DeleteTrail'
+              - 'cloudtrail:StopLogging'
+              - 'cloudtrail:UpdateTrail'
+            Resource: '*'
+      TargetIds:
+        - !Ref OrganizationRootId
+
+  # =============================================================================
+  # COMPUTE AND INFRASTRUCTURE POLICIES
+  # Policies controlling compute resources and infrastructure services
+  # =============================================================================
+
+  # Blocks all EC2 instance launches
+  # Why: Enforces serverless-first architecture and prevents unexpected compute costs
+  DenyRunInstances:
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Type: AWS::Organizations::Policy
+    Properties:
+      Type: SERVICE_CONTROL_POLICY
+      Name: DenyRunInstances
+      Description: Block all EC2 instance launches
+      Content:
+        Version: 2012-10-17
+        Statement:
+          - Sid: DenyRunInstances
+            Effect: Deny
+            Action:
+              - 'ec2:RunInstances'
+            Resource: '*'
+      TargetIds:
+        - !Ref OrganizationRootId
+
+  # Enforces EC2 security defaults across all accounts
+  # Why: Implements security best practices for EC2 instances when they are used
+  EC2SecurityDefaults:
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Type: AWS::Organizations::Policy
+    Properties:
+      Type: DECLARATIVE_POLICY_EC2
+      Name: EC2SecurityDefaults
+      Description: Enforce EC2 security defaults - disable serial console, block public images/snapshots, require IMDSv2
+      Content:
+        ec2_attributes:
+          serial_console_access:
+            status:
+              '@@assign': disabled
+          image_block_public_access:
+            state:
+              '@@assign': block_new_sharing
+          snapshot_block_public_access:
+            state:
+              '@@assign': block_new_sharing
+          allowed_images_settings:
+            state:
+              '@@assign': enabled
+            image_criteria:
+              criteria_1:
+                allowed_image_providers:
+                  '@@assign':
+                    - amazon
+          instance_metadata_defaults:
+            http_tokens:
+              '@@assign': required
+            http_put_response_hop_limit:
+              '@@assign': '2'
+            http_endpoint:
+              '@@assign': enabled
+            instance_metadata_tags:
+              '@@assign': enabled
+          vpc_block_public_access:
+            internet_gateway_block:
+              mode:
+                '@@assign': block_bidirectional
+              exclusions_allowed:
+                '@@assign': enabled
+      TargetIds:
+        - !Ref OrganizationRootId
+
+  # Comprehensive resource control policies for security and compliance
+  # Why: Enforces encryption, secure transport, and organization-only access
+  ResourceControlPolicies:
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Type: AWS::Organizations::Policy
+    Properties:
+      Type: RESOURCE_CONTROL_POLICY
+      Name: ResourceControlPolicies
+      Description: Comprehensive resource control policies for security and compliance
+      Content:
+        Version: 2012-10-17
+        Statement:
+          - Sid: EnforceSecureTransport
+            Effect: Deny
+            Principal: '*'
+            Action:
+              - 'sts:*'
+              - 's3:*'
+              - 'sqs:*'
+              - 'secretsmanager:*'
+              - 'kms:*'
+            Resource: '*'
+            Condition:
+              BoolIfExists:
+                'aws:SecureTransport': 'false'
+          - Sid: EnforceS3TlsVersion
+            Effect: Deny
+            Principal: '*'
+            Action:
+              - 's3:*'
+            Resource: '*'
+            Condition:
+              NumericLessThan:
+                's3:TlsVersion':
+                  - '1.2'
+          - Sid: EnforceEncryption
+            Effect: Deny
+            Principal: '*'
+            Action:
+              - 's3:PutObject'
+            Resource: '*'
+            Condition:
+              'Null':
+                's3:x-amz-server-side-encryption': 'true'
+          - Sid: DenyS3PublicAccess
+            Effect: Deny
+            Principal: '*'
+            Action:
+              - 's3:PutBucketAcl'
+              - 's3:PutBucketPolicy'
+              - 's3:PutObjectAcl'
+            Resource: '*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl':
+                  - 'public-read'
+                  - 'public-read-write'
+                  - 'authenticated-read'
+          - Sid: DenyExternalAccess
+            Effect: Deny
+            Principal: '*'
+            Action: '*'
+            Resource: '*'
+            Condition:
+              StringNotEquals:
+                'aws:PrincipalOrgID': !Ref OrganizationId
+              Bool:
+                'aws:PrincipalIsAWSService': 'false'
+          - Sid: RestrictOIDCToApprovedProviders
+            Effect: Deny
+            Principal: '*'
+            Action:
+              - 'sts:AssumeRoleWithWebIdentity'
+            Resource: '*'
+            Condition:
+              StringNotLike:
+                'token.actions.githubusercontent.com:sub': !Split
+                  - ','
+                  - !Sub
+                    - 'repo:${inner}'
+                    - inner: !Join
+                      - ',repo:'
+                      - !Ref GitHubRepos
+      TargetIds:
+        - !Ref OrganizationRootId
+
+  # =============================================================================
+  # COST OPTIMIZATION POLICIES - SERVERLESS SERVICES
+  # Policies that restrict high-cost features while allowing pay-per-use serverless
+  # =============================================================================
+
+  # Restricts high-cost Lambda features while allowing standard serverless execution
+  # Why: Prevents provisioned concurrency and other fixed-cost features that break serverless cost model
+  DenyHighCostLambdaFeatures:
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Type: AWS::Organizations::Policy
+    Properties:
+      Type: SERVICE_CONTROL_POLICY
+      Name: DenyHighCostLambdaFeatures
+      Description: Restrict high-cost Lambda features - allow only pay-per-use services (on-demand, standard execution)
+      Content:
+        Version: 2012-10-17
+        Statement:
+          - Sid: DenyProvisionedConcurrency
+            Effect: Deny
+            Action:
+              - 'lambda:CreateProvisionedConcurrencyConfig'
+              - 'lambda:UpdateProvisionedConcurrencyConfig'
+              - 'lambda:PutProvisionedConcurrencyConfig'
+            Resource: '*'
+
+          - Sid: DenyProvisionedModeESM
+            Effect: Deny
+            Action:
+              - 'lambda:CreateEventSourceMapping'
+              - 'lambda:UpdateEventSourceMapping'
+            Resource: '*'
+            Condition:
+              'Null':
+                'lambda:ProvisionedPollerConfig': 'false'
+          - Sid: DenyLambdaEdge
+            Effect: Deny
+            Action:
+              - 'lambda:CreateFunction'
+              - 'lambda:UpdateFunctionCode'
+              - 'lambda:UpdateFunctionConfiguration'
+            Resource: '*'
+            Condition:
+              StringLike:
+                'lambda:FunctionArn': 'arn:aws:lambda:us-east-1:*:function:*'
+              StringEquals:
+                'lambda:Principal': 'edgelambda.amazonaws.com'
+      TargetIds:
+        - !Ref OrganizationRootId
+
+  # Restricts high-cost DynamoDB features while allowing on-demand capacity
+  # Why: Forces pay-per-request billing and prevents expensive provisioned capacity
+  DenyHighCostDynamoDBFeatures:
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Type: AWS::Organizations::Policy
+    Properties:
+      Type: SERVICE_CONTROL_POLICY
+      Name: DenyHighCostDynamoDBFeatures
+      Description: Restrict high-cost DynamoDB features - allow only on-demand capacity mode and basic operations
+      Content:
+        Version: 2012-10-17
+        Statement:
+          - Sid: DenyProvisionedCapacity
+            Effect: Deny
+            Action:
+              - 'dynamodb:CreateTable'
+              - 'dynamodb:ModifyTable'
+              - 'dynamodb:UpdateTable'
+            Resource: '*'
+            Condition:
+              StringNotEquals:
+                'dynamodb:BillingMode': 'PAY_PER_REQUEST'
+          - Sid: DenyReservedCapacity
+            Effect: Deny
+            Action:
+              - 'dynamodb:PurchaseReservedCapacityOfferings'
+              - 'dynamodb:DescribeReservedCapacity'
+              - 'dynamodb:DescribeReservedCapacityOfferings'
+            Resource: '*'
+          - Sid: DenyGlobalTables
+            Effect: Deny
+            Action:
+              - 'dynamodb:CreateGlobalTable'
+              - 'dynamodb:UpdateGlobalTable'
+              - 'dynamodb:CreateReplicationGroup'
+            Resource: '*'
+          - Sid: DenyDAX
+            Effect: Deny
+            Action:
+              - 'dax:*'
+            Resource: '*'
+
+      TargetIds:
+        - !Ref OrganizationRootId
+
+  # Forces usage of HTTP APIs by blocking REST APIs and Private APIs
+  # Why: HTTP APIs are significantly cheaper than REST APIs for most use cases
+  DenyHighCostAPIGatewayFeatures:
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Type: AWS::Organizations::Policy
+    Properties:
+      Type: SERVICE_CONTROL_POLICY
+      Name: DenyHighCostAPIGatewayFeatures
+      Description: Force usage of HTTP APIs by blocking REST APIs and Private APIs
+      Content:
+        Version: 2012-10-17
+        Statement:
+          - Sid: DenyRESTAPIs
+            Effect: Deny
+            Action:
+              - 'apigateway:CreateRestApi'
+              - 'apigateway:ImportRestApi'
+              - 'apigateway:CloneRestApi'
+              - 'apigateway:PutRestApi'
+            Resource: '*'
+          - Sid: DenyPrivateAPIs
+            Effect: Deny
+            Action:
+              - 'apigateway:CreateRestApi'
+              - 'apigateway:ImportRestApi'
+            Resource: '*'
+            Condition:
+              StringEquals:
+                'apigateway:Request/EndpointType': 'PRIVATE'
+          - Sid: DenyVPCEndpoints
+            Effect: Deny
+            Action:
+              - 'ec2:CreateVpcEndpoint'
+            Resource: '*'
+            Condition:
+              StringEquals:
+                'ec2:VpceServiceName': 'com.amazonaws.*.execute-api'
+      TargetIds:
+        - !Ref OrganizationRootId
+
+  # Forces Express Workflows and blocks compute-heavy integrations
+  # Why: Express workflows are cheaper and maintain serverless cost model
+  DenyHighCostStepFunctionsFeatures:
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Type: AWS::Organizations::Policy
+    Properties:
+      Type: SERVICE_CONTROL_POLICY
+      Name: DenyHighCostStepFunctionsFeatures
+      Description: Force Express Workflows and block compute-heavy integrations to maintain serverless cost model
+      Content:
+        Version: 2012-10-17
+        Statement:
+          - Sid: ForceExpressWorkflows
+            Effect: Deny
+            Action:
+              - 'states:CreateStateMachine'
+              - 'states:UpdateStateMachine'
+            Resource: '*'
+            Condition:
+              StringNotEquals:
+                'states:StateMachineType': 'EXPRESS'
+          - Sid: DenyBatchIntegrations
+            Effect: Deny
+            Action:
+              - 'states:CreateStateMachine'
+              - 'states:UpdateStateMachine'
+            Resource: '*'
+            Condition:
+              StringLike:
+                'states:Definition': '*arn:aws:states:::batch:*'
+          - Sid: DenyEMRIntegrations
+            Effect: Deny
+            Action:
+              - 'states:CreateStateMachine'
+              - 'states:UpdateStateMachine'
+            Resource: '*'
+            Condition:
+              StringLike:
+                'states:Definition': '*arn:aws:states:::emr:*'
+      TargetIds:
+        - !Ref OrganizationRootId
+
+  # Blocks EventBridge features with storage costs while allowing pay-per-event usage
+  # Why: Archive and replay features have ongoing storage costs that break serverless model
+  DenyHighCostEventBridgeFeatures:
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Type: AWS::Organizations::Policy
+    Properties:
+      Type: SERVICE_CONTROL_POLICY
+      Name: DenyHighCostEventBridgeFeatures
+      Description: Block EventBridge features with storage costs while allowing pay-per-event usage
+      Content:
+        Version: 2012-10-17
+        Statement:
+          - Sid: DenyEventArchive
+            Effect: Deny
+            Action:
+              - 'events:CreateArchive'
+              - 'events:UpdateArchive'
+            Resource: '*'
+          - Sid: DenyEventReplay
+            Effect: Deny
+            Action:
+              - 'events:StartReplay'
+            Resource: '*'
+          - Sid: DenySchemaDiscovery
+            Effect: Deny
+            Action:
+              - 'schemas:StartDiscoverer'
+              - 'schemas:CreateDiscoverer'
+            Resource: '*'
+      TargetIds:
+        - !Ref OrganizationRootId
+
+  # Restricts high-cost CloudWatch features to prevent accidental charges
+  # Why: Detailed monitoring and high-resolution metrics can generate significant costs
+  DenyHighCostCloudWatchFeatures:
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Type: AWS::Organizations::Policy
+    Properties:
+      Type: SERVICE_CONTROL_POLICY
+      Name: DenyHighCostCloudWatchFeatures
+      Description: Restrict high-cost CloudWatch features to prevent accidental charges
+      Content:
+        Version: 2012-10-17
+        Statement:
+          - Sid: DenyDetailedMonitoring
+            Effect: Deny
+            Action:
+              - 'ec2:MonitorInstances'
+              - 'rds:ModifyDBInstance'
+              - 'elasticloadbalancing:ModifyLoadBalancerAttributes'
+            Resource: '*'
+            Condition:
+              StringEquals:
+                'ec2:DetailedMonitoring': 'true'
+          - Sid: DenyContainerInsightsEnhanced
+            Effect: Deny
+            Action:
+              - 'ecs:PutAccountSetting'
+              - 'eks:UpdateClusterConfig'
+            Resource: '*'
+            Condition:
+              StringLike:
+                'ecs:container-insights': 'enhanced'
+          - Sid: DenyHighResolutionMetrics
+            Effect: Deny
+            Action:
+              - 'cloudwatch:PutMetricData'
+            Resource: '*'
+            Condition:
+              NumericLessThan:
+                'cloudwatch:MetricResolution': '60'
+          - Sid: DenyLongTermLogRetention
+            Effect: Deny
+            Action:
+              - 'logs:PutRetentionPolicy'
+            Resource: '*'
+            Condition:
+              NumericGreaterThan:
+                'logs:RetentionInDays': '30'
+          - Sid: DenyExpensiveLogFeatures
+            Effect: Deny
+            Action:
+              - 'logs:StartLiveTail'
+              - 'logs:PutDataProtectionPolicy'
+              - 'logs:CreateLogAnomalyDetector'
+            Resource: '*'
+      TargetIds:
+        - !Ref OrganizationRootId
+
+  # =============================================================================
+  # COST OPTIMIZATION POLICIES - AI/ML SERVICES
+  # Policies controlling AI/ML services to prevent high costs
+  # =============================================================================
+
+  # Restricts high-cost Bedrock features while allowing pay-per-use services
+  # Why: Provisioned throughput and custom models can generate significant monthly costs
+  DenyHighCostBedrockFeatures:
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Type: AWS::Organizations::Policy
+    Properties:
+      Type: SERVICE_CONTROL_POLICY
+      Name: DenyHighCostBedrockFeatures
+      Description: Restrict high-cost Bedrock features - allow only pay-per-use services (on-demand, batch)
+      Content:
+        Version: 2012-10-17
+        Statement:
+          - Sid: DenyProvisionedThroughput
+            Effect: Deny
+            Action:
+              - 'bedrock:CreateProvisionedModelThroughput'
+              - 'bedrock:UpdateProvisionedModelThroughput'
+              - 'bedrock:PutProvisionedModelThroughput'
+            Resource: '*'
+          - Sid: DenyCustomModelImport
+            Effect: Deny
+            Action:
+              - 'bedrock:CreateModelImportJob'
+              - 'bedrock:ImportCustomModel'
+            Resource: '*'
+          - Sid: DenyModelCustomization
+            Effect: Deny
+            Action:
+              - 'bedrock:CreateModelCustomizationJob'
+              - 'bedrock:CreateFineTuningJob'
+              - 'bedrock:CreateContinuedPreTrainingJob'
+            Resource: '*'
+          - Sid: DenyMarketplaceModels
+            Effect: Deny
+            Action:
+              - 'bedrock:CreateMarketplaceModelEndpoint'
+              - 'bedrock:RegisterMarketplaceModelEndpoint'
+              - 'aws-marketplace:Subscribe'
+            Resource: '*'
+            Condition:
+              StringLike:
+                'aws:RequestedService': 'bedrock'
+          - Sid: DenyHumanEvaluation
+            Effect: Deny
+            Action:
+              - 'bedrock:CreateEvaluationJob'
+            Resource: '*'
+            Condition:
+              StringEquals:
+                'bedrock:EvaluationType': 'Human'
+          - Sid: DenyDataAutomationCustomOutput
+            Effect: Deny
+            Action:
+              - 'bedrock:InvokeModel'
+            Resource: '*'
+            Condition:
+              StringLike:
+                'bedrock:ModelId': '*data-automation*'
+              StringEquals:
+                'bedrock:OutputType': 'Custom'
+      TargetIds:
+        - !Ref OrganizationRootId
+
+  # =============================================================================
+  # COST OPTIMIZATION POLICIES - DATABASE AND COMPUTE SERVICES
+  # Policies that block expensive services with monthly minimums
+  # =============================================================================
+
+  # Blocks expensive database and compute services with monthly minimums
+  # Why: Forces true pay-per-use serverless architecture with zero monthly minimums
+  DenyExpensiveDatabaseServices:
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Type: AWS::Organizations::Policy
+    Properties:
+      Type: SERVICE_CONTROL_POLICY
+      Name: DenyExpensiveDatabaseServices
+      Description: Block expensive database and compute services with monthly minimums - force true pay-per-use serverless
+      Content:
+        Version: 2012-10-17
+        Statement:
+          - Sid: DenyRDSAndAurora
+            Effect: Deny
+            Action:
+              - 'rds:*'
+            Resource: '*'
+          - Sid: DenyElastiCache
+            Effect: Deny
+            Action:
+              - 'elasticache:*'
+            Resource: '*'
+          - Sid: DenyRedshift
+            Effect: Deny
+            Action:
+              - 'redshift:*'
+              - 'redshift-data:*'
+              - 'redshift-serverless:*'
+            Resource: '*'
+          - Sid: DenyOpenSearch
+            Effect: Deny
+            Action:
+              - 'es:*'
+              - 'opensearch:*'
+            Resource: '*'
+          - Sid: DenyMemoryDB
+            Effect: Deny
+            Action:
+              - 'memorydb:*'
+            Resource: '*'
+          - Sid: DenyDocumentDB
+            Effect: Deny
+            Action:
+              - 'docdb:*'
+            Resource: '*'
+          - Sid: DenyNeptune
+            Effect: Deny
+            Action:
+              - 'neptune:*'
+              - 'neptune-db:*'
+            Resource: '*'
+          - Sid: DenyKinesis
+            Effect: Deny
+            Action:
+              - 'kinesis:*'
+              - 'kinesisanalytics:*'
+              - 'kinesisanalyticsv2:*'
+              - 'kinesisvideo:*'
+            Resource: '*'
+          - Sid: DenyMSK
+            Effect: Deny
+            Action:
+              - 'kafka:*'
+              - 'kafka-cluster:*'
+            Resource: '*'
+          - Sid: DenyEKS
+            Effect: Deny
+            Action:
+              - 'eks:*'
+            Resource: '*'
+          - Sid: DenyEMR
+            Effect: Deny
+            Action:
+              - 'emr:*'
+              - 'emr-containers:*'
+              - 'emr-serverless:*'
+            Resource: '*'
+          - Sid: DenyECSPersistentServices
+            Effect: Deny
+            Action:
+              - 'ecs:CreateCluster'
+              - 'ecs:CreateService'
+              - 'ecs:UpdateService'
+              - 'ecs:CreateCapacityProvider'
+              - 'ecs:PutClusterCapacityProviders'
+            Resource: '*'
+      TargetIds:
+        - !Ref OrganizationRootId
+
+  # Blocks expensive storage features with provisioned capacity or hourly charges
+  # Why: Forces cost-effective storage options and prevents accidental high-cost configurations
+  DenyExpensiveStorageFeatures:
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Type: AWS::Organizations::Policy
+    Properties:
+      Type: SERVICE_CONTROL_POLICY
+      Name: DenyExpensiveStorageFeatures
+      Description: Block expensive storage features with provisioned capacity or hourly charges
+      Content:
+        Version: 2012-10-17
+        Statement:
+          - Sid: DenyProvisionedIOPS
+            Effect: Deny
+            Action:
+              - 'ec2:CreateVolume'
+              - 'ec2:ModifyVolume'
+            Resource: '*'
+            Condition:
+              StringNotEquals:
+                'ec2:VolumeType': 'gp3'
+          - Sid: DenyEFSProvisionedThroughput
+            Effect: Deny
+            Action:
+              - 'elasticfilesystem:CreateFileSystem'
+              - 'elasticfilesystem:ModifyThroughputMode'
+            Resource: '*'
+            Condition:
+              StringEquals:
+                'elasticfilesystem:ThroughputMode': 'provisioned'
+          - Sid: DenyFSx
+            Effect: Deny
+            Action:
+              - 'fsx:*'
+            Resource: '*'
+      TargetIds:
+        - !Ref OrganizationRootId
+
+  # Blocks expensive networking features with hourly charges
+  # Why: Prevents accidental creation of costly networking resources
+  DenyExpensiveNetworkingFeatures:
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Type: AWS::Organizations::Policy
+    Properties:
+      Type: SERVICE_CONTROL_POLICY
+      Name: DenyExpensiveNetworkingFeatures
+      Description: Block expensive networking features with hourly charges
+      Content:
+        Version: 2012-10-17
+        Statement:
+          - Sid: DenyVPCInterfaceEndpoints
+            Effect: Deny
+            Action:
+              - 'ec2:CreateVpcEndpoint'
+            Resource: '*'
+            Condition:
+              StringNotEquals:
+                'ec2:VpceServiceName':
+                  - 'com.amazonaws.*.s3'
+                  - 'com.amazonaws.*.dynamodb'
+          - Sid: DenyLoadBalancers
+            Effect: Deny
+            Action:
+              - 'elasticloadbalancing:CreateLoadBalancer'
+            Resource: '*'
+          - Sid: DenyNATGateway
+            Effect: Deny
+            Action:
+              - 'ec2:CreateNatGateway'
+            Resource: '*'
+      TargetIds:
+        - !Ref OrganizationRootId
+
+  # Blocks expensive analytics and messaging services with hourly charges
+  # Why: Prevents accidental creation of costly analytics and messaging resources
+  DenyExpensiveAnalyticsAndMessaging:
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Type: AWS::Organizations::Policy
+    Properties:
+      Type: SERVICE_CONTROL_POLICY
+      Name: DenyExpensiveAnalyticsAndMessaging
+      Description: Block expensive analytics and messaging services with hourly charges
+      Content:
+        Version: 2012-10-17
+        Statement:
+          - Sid: DenyGlueDevelopmentEndpoints
+            Effect: Deny
+            Action:
+              - 'glue:CreateDevEndpoint'
+            Resource: '*'
+          - Sid: DenyAthenaProvisionedCapacity
+            Effect: Deny
+            Action:
+              - 'athena:CreateCapacityReservation'
+            Resource: '*'
+          - Sid: DenyAmazonMQ
+            Effect: Deny
+            Action:
+              - 'mq:*'
+            Resource: '*'
+      TargetIds:
+        - !Ref OrganizationRootId
+
+  # =============================================================================
+  # COST OPTIMIZATION POLICIES - EXPENSIVE SECURITY SERVICES
+  # Policies that block costly security services to control expenses
+  # =============================================================================
+
+  # Prevents Security Hub usage across all accounts to avoid costs
+  # Why: Security Hub can be expensive and may not provide value in strictly serverless environments
+  DenySecurityHubActions:
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Type: AWS::Organizations::Policy
+    Properties:
+      Type: SERVICE_CONTROL_POLICY
+      Name: DenySecurityHubActions
+      Description: Prevent Security Hub usage across all accounts to avoid costs
+      Content:
+        Version: 2012-10-17
+        Statement:
+          - Sid: DenySecurityHub
+            Effect: Deny
+            Action:
+              - 'securityhub:*'
+            Resource: '*'
+      TargetIds:
+        - !Ref OrganizationRootId
+
+  # =============================================================================
+  # PRIVACY AND COMPLIANCE POLICIES
+  # Policies that manage data privacy and compliance requirements
+  # =============================================================================
+
+  # Opts out of all AI services by default, allows child OUs to override
+  # Why: Ensures data privacy by preventing automatic AI service data usage
+  OptOutAllAIServices:
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Type: AWS::Organizations::Policy
+    Properties:
+      Type: AISERVICES_OPT_OUT_POLICY
+      Name: OptOutAllAIServices
+      Description: Opt-Out by default, allow child OUs to override
+      Content:
+        services:
+          default:
+            '@@operators_allowed_for_child_policies':
+              - '@@none'
+            opt_out_policy:
+              '@@operators_allowed_for_child_policies':
+                - '@@none'
+              '@@assign': optOut
+      TargetIds:
+        - !Ref OrganizationRootId
+
+  # Disables AWS Chatbot access for Chime, Microsoft Teams, and Slack platforms
+  # Why: Prevents potential data leakage through chat integrations
+  DisableChimeTeamsSlackAccessToAccounts:
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Type: AWS::Organizations::Policy
+    Properties:
+      Type: CHATBOT_POLICY
+      Name: DisableChimeTeamsSlackAccessToAccounts
+      Description: Disables AWS Chatbot access for Chime, Microsoft Teams, and Slack platforms across all accounts
+      Content:
+        chatbot:
+          platforms:
+            chime:
+              client:
+                '@@assign': disabled
+            slack:
+              client:
+                '@@assign': disabled
+            microsoft_teams:
+              client:
+                '@@assign': disabled
+          default:
+            client:
+              '@@assign': disabled
+      TargetIds:
+        - !Ref OrganizationRootId
+
+  # =============================================================================
+  # COST MANAGEMENT AND MONITORING
+  # Budget and cost anomaly detection for proactive cost control
+  # =============================================================================
+
+  # Monthly cost budget with alerts at 75% and 100% thresholds
+  # Why: Proactive cost monitoring to prevent billing surprises
+  MonthlyCostBudget:
+    Type: AWS::Budgets::Budget
+    Properties:
+      Budget:
+        BudgetName: My Monthly Cost Budget
+        BudgetLimit:
+          Amount: 10
+          Unit: USD
+        TimeUnit: MONTHLY
+        BudgetType: COST
+        TimePeriod:
+          Start: "2025-07-01"
+      NotificationsWithSubscribers:
+        - Notification:
+            NotificationType: FORECASTED
+            ComparisonOperator: GREATER_THAN
+            Threshold: 75
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Select [0, !Ref BudgetAlertEmails]
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 75
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Select [0, !Ref BudgetAlertEmails]
+        - Notification:
+            NotificationType: FORECASTED
+            ComparisonOperator: GREATER_THAN
+            Threshold: 100
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Select [0, !Ref BudgetAlertEmails]
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 100
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Select [0, !Ref BudgetAlertEmails]
+
+  # Cost anomaly detection for serverless services
+  # Why: Free ML-powered anomaly detection to catch unexpected cost spikes
+  ServerlessCostAnomalyMonitor:
+    Type: AWS::CE::AnomalyMonitor
+    Properties:
+      MonitorName: ServerlessServicesAnomalies
+      MonitorType: CUSTOM
+      MonitorSpecification: |
+        {
+          "Dimensions": {
+            "Key": "SERVICE",
+            "Values": [
+              "Amazon Simple Storage Service",
+              "AWS Lambda",
+              "Amazon DynamoDB",
+              "Amazon API Gateway",
+              "AWS Step Functions",
+              "Amazon EventBridge",
+              "Amazon CloudWatch"
+            ],
+            "MatchOptions": [ "EQUALS" ]
+          }
+        }
+
+  # Cost anomaly subscription for email alerts
+  # Why: Get notified of cost anomalies above $5 threshold
+  CostAnomalySubscription:
+    Type: AWS::CE::AnomalySubscription
+    Properties:
+      SubscriptionName: ServerlessAnomalyAlerts
+      Frequency: DAILY
+      MonitorArnList:
+        - !Ref ServerlessCostAnomalyMonitor
+      Subscribers:
+        - Type: EMAIL
+          Address: !Select [0, !Ref BudgetAlertEmails]
+        - Type: EMAIL
+          Address: !Select [1, !Ref BudgetAlertEmails]
+      ThresholdExpression: |
+        {
+          "And": [{
+            "Dimensions": {
+              "Key": "ANOMALY_TOTAL_IMPACT_ABSOLUTE",
+              "Values": [ "5" ],
+              "MatchOptions": [ "GREATER_THAN_OR_EQUAL" ]
+            }
+          }]
+        }
+
+Outputs:
+  # Foundational Governance Policies
+  SCPDenyLeaveOrganizationPolicyId:
+    Description: Deny Leave Organization SCP Policy ID
+    Value: !Ref SCPDenyLeaveOrganization
+    Export:
+      Name: !Sub "${AWS::StackName}-SCPDenyLeaveOrganization-PolicyId"
+
+  DenyAllResourcesOutsideEUPolicyId:
+    Description: EU Region Restriction Policy ID
+    Value: !Ref DenyAllResourcesOutsideEU
+    Export:
+      Name: !Sub "${AWS::StackName}-DenyAllResourcesOutsideEU-PolicyId"
+
+  BasicTaggingStandardsPolicyId:
+    Description: Basic Tagging Standards Policy ID
+    Value: !Ref BasicTaggingStandards
+    Export:
+      Name: !Sub "${AWS::StackName}-BasicTaggingStandards-PolicyId"
+
+  # Security and Access Control Policies
+  RootUserDenyAllExceptActionsPolicyId:
+    Description: Root User Restriction Policy ID
+    Value: !Ref RootUserDenyAllExceptActionsThatRequireRootAccess
+    Export:
+      Name: !Sub "${AWS::StackName}-RootUserDenyAllExceptActions-PolicyId"
+
+  DenyAccountManagementActionsPolicyId:
+    Description: Account Management Restriction SCP Policy ID
+    Value: !Ref DenyAccountManagementActions
+    Export:
+      Name: !Sub "${AWS::StackName}-DenyAccountManagementActions-PolicyId"
+
+  DenyHighRiskActionsPolicyId:
+    Description: High-Risk Actions Block SCP Policy ID
+    Value: !Ref DenyHighRiskActions
+    Export:
+      Name: !Sub "${AWS::StackName}-DenyHighRiskActions-PolicyId"
+
+  AWSSSODenyMemberAccountInstancesPolicyId:
+    Description: SSO Deny Member Account Instances Policy ID
+    Value: !Ref AWSSSODenyMemberAccountInstances
+    Export:
+      Name: !Sub "${AWS::StackName}-AWSSSODenyMemberAccountInstances-PolicyId"
+
+  ProtectCloudTrailPolicyId:
+    Description: CloudTrail Protection SCP Policy ID
+    Value: !Ref ProtectCloudTrail
+    Export:
+      Name: !Sub "${AWS::StackName}-ProtectCloudTrail-PolicyId"
+
+  # Compute and Infrastructure Policies
+  DenyRunInstancesPolicyId:
+    Description: Deny RunInstances SCP Policy ID
+    Value: !Ref DenyRunInstances
+    Export:
+      Name: !Sub "${AWS::StackName}-DenyRunInstances-PolicyId"
+
+  EC2SecurityDefaultsPolicyId:
+    Description: EC2 Security Defaults Declarative Policy ID
+    Value: !Ref EC2SecurityDefaults
+    Export:
+      Name: !Sub "${AWS::StackName}-EC2SecurityDefaults-PolicyId"
+
+  ResourceControlPoliciesPolicyId:
+    Description: Resource Control Policies Policy ID
+    Value: !Ref ResourceControlPolicies
+    Export:
+      Name: !Sub "${AWS::StackName}-ResourceControlPolicies-PolicyId"
+
+  # Cost Optimization Policies - Serverless Services
+  DenyHighCostLambdaFeaturesPolicyId:
+    Description: Lambda High-Cost Features Restriction SCP Policy ID
+    Value: !Ref DenyHighCostLambdaFeatures
+    Export:
+      Name: !Sub "${AWS::StackName}-DenyHighCostLambdaFeatures-PolicyId"
+
+  DenyHighCostDynamoDBFeaturesPolicyId:
+    Description: DynamoDB High-Cost Features Restriction SCP Policy ID
+    Value: !Ref DenyHighCostDynamoDBFeatures
+    Export:
+      Name: !Sub "${AWS::StackName}-DenyHighCostDynamoDBFeatures-PolicyId"
+
+  DenyHighCostAPIGatewayFeaturesPolicyId:
+    Description: API Gateway High-Cost Features Restriction SCP Policy ID
+    Value: !Ref DenyHighCostAPIGatewayFeatures
+    Export:
+      Name: !Sub "${AWS::StackName}-DenyHighCostAPIGatewayFeatures-PolicyId"
+
+  DenyHighCostStepFunctionsFeaturesId:
+    Description: Step Functions High-Cost Features Restriction SCP Policy ID
+    Value: !Ref DenyHighCostStepFunctionsFeatures
+    Export:
+      Name: !Sub "${AWS::StackName}-DenyHighCostStepFunctionsFeatures-PolicyId"
+
+  DenyHighCostEventBridgeFeaturesPolicyId:
+    Description: EventBridge High-Cost Features Restriction SCP Policy ID
+    Value: !Ref DenyHighCostEventBridgeFeatures
+    Export:
+      Name: !Sub "${AWS::StackName}-DenyHighCostEventBridgeFeatures-PolicyId"
+
+  DenyHighCostCloudWatchFeaturesPolicyId:
+    Description: CloudWatch High-Cost Features Restriction SCP Policy ID
+    Value: !Ref DenyHighCostCloudWatchFeatures
+    Export:
+      Name: !Sub "${AWS::StackName}-DenyHighCostCloudWatchFeatures-PolicyId"
+
+  # Cost Optimization Policies - AI/ML Services
+  DenyHighCostBedrockFeaturesPolicyId:
+    Description: Bedrock High-Cost Features Restriction SCP Policy ID
+    Value: !Ref DenyHighCostBedrockFeatures
+    Export:
+      Name: !Sub "${AWS::StackName}-DenyHighCostBedrockFeatures-PolicyId"
+
+  # Cost Optimization Policies - Database and Compute Services
+  DenyExpensiveDatabaseServicesPolicyId:
+    Description: Expensive Database Services Block SCP Policy ID
+    Value: !Ref DenyExpensiveDatabaseServices
+    Export:
+      Name: !Sub "${AWS::StackName}-DenyExpensiveDatabaseServices-PolicyId"
+
+  DenyExpensiveStorageFeaturesPolicyId:
+    Description: Expensive Storage Features Block SCP Policy ID
+    Value: !Ref DenyExpensiveStorageFeatures
+    Export:
+      Name: !Sub "${AWS::StackName}-DenyExpensiveStorageFeatures-PolicyId"
+
+  DenyExpensiveNetworkingFeaturesPolicyId:
+    Description: Expensive Networking Features Block SCP Policy ID
+    Value: !Ref DenyExpensiveNetworkingFeatures
+    Export:
+      Name: !Sub "${AWS::StackName}-DenyExpensiveNetworkingFeatures-PolicyId"
+
+  DenyExpensiveAnalyticsAndMessagingPolicyId:
+    Description: Expensive Analytics and Messaging Block SCP Policy ID
+    Value: !Ref DenyExpensiveAnalyticsAndMessaging
+    Export:
+      Name: !Sub "${AWS::StackName}-DenyExpensiveAnalyticsAndMessaging-PolicyId"
+
+  # Cost Optimization Policies - Expensive Security Services
+  DenySecurityHubActionsPolicyId:
+    Description: Security Hub Deny SCP Policy ID
+    Value: !Ref DenySecurityHubActions
+    Export:
+      Name: !Sub "${AWS::StackName}-DenySecurityHubActions-PolicyId"
+
+  # Privacy and Compliance Policies
+  OptOutAllAIServicesPolicyId:
+    Description: AI Services Opt-Out Policy ID
+    Value: !Ref OptOutAllAIServices
+    Export:
+      Name: !Sub "${AWS::StackName}-OptOutAllAIServices-PolicyId"
+
+  DisableChimeTeamsSlackPolicyId:
+    Description: Chatbot Policy ID
+    Value: !Ref DisableChimeTeamsSlackAccessToAccounts
+    Export:
+      Name: !Sub "${AWS::StackName}-DisableChimeTeamsSlack-PolicyId"
+
+  # Cost Management Outputs
+  MonthlyCostBudgetId:
+    Description: Monthly Cost Budget ID
+    Value: !Ref MonthlyCostBudget
+    Export:
+      Name: !Sub "${AWS::StackName}-MonthlyCostBudget-Id"
+
+  ServerlessCostAnomalyMonitorId:
+    Description: Serverless Cost Anomaly Monitor ID
+    Value: !Ref ServerlessCostAnomalyMonitor
+    Export:
+      Name: !Sub "${AWS::StackName}-ServerlessCostAnomalyMonitor-Id"
+
+  CostAnomalySubscriptionId:
+    Description: Cost Anomaly Subscription ID
+    Value: !Ref CostAnomalySubscription
+    Export:
+      Name: !Sub "${AWS::StackName}-CostAnomalySubscription-Id"

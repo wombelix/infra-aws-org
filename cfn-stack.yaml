@@ -1,0 +1,9 @@
+# SPDX-FileCopyrightText: 2025 Dominik Wombacher <dominik@wombacher.cc>
+#
+# SPDX-License-Identifier: MIT-0
+
+template-file-path: cfn-aws-orgs.yaml
+
+parameters: {}
+
+tags: {}
