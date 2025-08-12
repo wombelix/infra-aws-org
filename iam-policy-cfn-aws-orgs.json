@@ -1,0 +1,64 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "OrganizationsPolicies",
+      "Effect": "Allow",
+      "Action": [
+        "organizations:CreatePolicy",
+        "organizations:UpdatePolicy",
+        "organizations:DeletePolicy",
+        "organizations:AttachPolicy",
+        "organizations:DetachPolicy",
+        "organizations:ListPolicies",
+        "organizations:DescribePolicy",
+        "organizations:ListTargetsForPolicy",
+        "organizations:ListRoots",
+        "organizations:DescribeOrganization"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "BudgetsManagement",
+      "Effect": "Allow",
+      "Action": [
+        "budgets:CreateBudget",
+        "budgets:UpdateBudget",
+        "budgets:DeleteBudget",
+        "budgets:DescribeBudget",
+        "budgets:DescribeBudgets"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "CostAnomalyDetection",
+      "Effect": "Allow",
+      "Action": [
+        "ce:CreateAnomalyDetector",
+        "ce:UpdateAnomalyDetector",
+        "ce:DeleteAnomalyDetector",
+        "ce:GetAnomalyDetectors",
+        "ce:CreateAnomalySubscription",
+        "ce:UpdateAnomalySubscription",
+        "ce:DeleteAnomalySubscription",
+        "ce:GetAnomalySubscriptions"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "CloudFormationManagement",
+      "Effect": "Allow",
+      "Action": [
+        "cloudformation:CreateStack",
+        "cloudformation:UpdateStack",
+        "cloudformation:DeleteStack",
+        "cloudformation:DescribeStacks",
+        "cloudformation:DescribeStackEvents",
+        "cloudformation:DescribeStackResources",
+        "cloudformation:GetTemplate",
+        "cloudformation:ValidateTemplate"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
