@@ -1,0 +1,162 @@
+# SPDX-FileCopyrightText: 2025 Dominik Wombacher <dominik@wombacher.cc>
+#
+# SPDX-License-Identifier: MIT-0
+
+AWSTemplateFormatVersion: '2010-09-09'
+Description: "Service Control Policies for AWS Organizations - Foundational governance controls"
+
+Parameters:
+  OrganizationRootId:
+    Type: String
+    Description: "AWS Organizations root ID (e.g., r-xxxx)"
+
+Resources:
+  # =============================================================================
+  # FOUNDATIONAL GOVERNANCE POLICIES
+  # Core policies that establish basic organizational governance and compliance
+  # =============================================================================
+
+  # Prevents member accounts from leaving the organization
+  # Why: Essential security control to prevent unauthorized account removal
+  # Reference: https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_policies_scps_examples.html#example-deny-leave-org
+  SCPDenyLeaveOrganization:
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Type: AWS::Organizations::Policy
+    Properties:
+      Type: SERVICE_CONTROL_POLICY
+      Name: SCPDenyLeaveOrganization
+      Description: |
+        Deny the ability for member accounts to leave the organization. Essential security control to prevent unauthorized account removal.
+        See: https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_policies_scps_examples.html#example-deny-leave-org
+      Content:
+        Version: 2012-10-17
+        Statement:
+          - Sid: SCPDenyLeaveOrganization
+            Effect: Deny
+            Action:
+              - 'organizations:LeaveOrganization'
+            Resource: '*'
+      TargetIds:
+        - !Ref OrganizationRootId
+
+  # Restricts all AWS resources to EU regions only (eu-central-1, eu-west-1)
+  # Why: Data sovereignty compliance and cost optimization through regional focus
+  # Reference: https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_policies_scps_examples.html#example-deny-regions
+  DenyAllResourcesOutsideEU:
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Type: AWS::Organizations::Policy
+    Properties:
+      Type: SERVICE_CONTROL_POLICY
+      Name: DenyAllResourcesOutsideEU
+      Description: |
+        Except for global services, deny all resource creation in regions outside eu-central-1 and eu-west-1.
+        Enforces data sovereignty and cost optimization through regional focus.
+        See: https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_policies_scps_examples.html#example-deny-regions
+      Content:
+        Version: 2012-10-17
+        Statement:
+          - Sid: DenyAllOutsideEU
+            Effect: Deny
+            NotAction:
+              - 'a4b:*'
+              - 'aws-marketplace-management:*'
+              - 'aws-marketplace:*'
+              - 'aws-portal:*'
+              - 'budgets:*'
+              - 'ce:*'
+              - 'chime:*'
+              - 'cloudfront:*'
+              - 'config:*'
+              - 'cur:*'
+              - 'directconnect:*'
+              - 'ec2:DescribeRegions'
+              - 'ec2:DescribeTransitGateways'
+              - 'ec2:DescribeVpnGateways'
+              - 'fms:*'
+              - 'globalaccelerator:*'
+              - 'health:*'
+              - 'iam:*'
+              - 'importexport:*'
+              - 'mobileanalytics:*'
+              - 'networkmanager:*'
+              - 'organizations:*'
+              - 'pricing:*'
+              - 'route53:*'
+              - 'route53domains:*'
+              - 'route53-recovery-cluster:*'
+              - 'route53-recovery-control-config:*'
+              - 'route53-recovery-readiness:*'
+              - 's3:GetAccountPublic*'
+              - 's3:ListAllMyBuckets'
+              - 's3:ListMultiRegionAccessPoints'
+              - 's3:PutAccountPublic*'
+              - 'shield:*'
+              - 'support:*'
+              - 'trustedadvisor:*'
+              - 'waf-regional:*'
+              - 'waf:*'
+              - 'wafv2:*'
+              - 'wellarchitected:*'
+            Resource: '*'
+            Condition:
+              StringNotEquals:
+                'aws:RequestedRegion':
+                  - eu-central-1
+                  - eu-west-1
+      TargetIds:
+        - !Ref OrganizationRootId
+
+  # Deny deletion of default CloudWatch log groups and the default CloudTrail S3 bucket
+  # Why: Ensures audit and operational logs are not accidentally or maliciously deleted
+  # Reference: https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/iam-access-control-overview-cwl.html#CWL_ARN_Format
+  ProtectDefaultLogGroupsAndBuckets:
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Type: AWS::Organizations::Policy
+    Properties:
+      Type: SERVICE_CONTROL_POLICY
+      Name: ProtectDefaultLogGroupsAndBuckets
+      Description: |
+        Deny deletion of default CloudWatch log groups and the default CloudTrail S3 bucket.
+        This protects log groups for Lambda, CloudTrail, and EventBridge, and S3 buckets matching the CloudTrail default naming pattern.
+        See: https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/iam-access-control-overview-cwl.html#CWL_ARN_Format
+      Content:
+        Version: 2012-10-17
+        Statement:
+          - Sid: DenyDeleteDefaultCloudWatchLogGroups
+            Effect: Deny
+            Action:
+              - logs:DeleteLogGroup
+            Resource:
+              - arn:aws:logs:*:*:log-group:/aws/lambda/*
+              - arn:aws:logs:*:*:log-group:/aws/cloudtrail/*
+              - arn:aws:logs:*:*:log-group:/aws/events/*
+          - Sid: DenyDeleteDefaultCloudTrailBucket
+            Effect: Deny
+            Action:
+              - s3:DeleteBucket
+            Resource:
+              - arn:aws:s3:::aws-cloudtrail-logs-*
+      TargetIds:
+        - !Ref OrganizationRootId
+
+Outputs:
+  SCPDenyLeaveOrganizationPolicyId:
+    Description: Deny Leave Organization SCP Policy ID
+    Value: !Ref SCPDenyLeaveOrganization
+    Export:
+      Name: !Sub "${AWS::StackName}-SCPDenyLeaveOrganization-PolicyId"
+
+  DenyAllResourcesOutsideEUPolicyId:
+    Description: EU Region Restriction Policy ID
+    Value: !Ref DenyAllResourcesOutsideEU
+    Export:
+      Name: !Sub "${AWS::StackName}-DenyAllResourcesOutsideEU-PolicyId"
+
+  ProtectDefaultLogGroupsAndBucketsPolicyId:
+    Description: Log Groups and Buckets Protection SCP Policy ID
+    Value: !Ref ProtectDefaultLogGroupsAndBuckets
+    Export:
+      Name: !Sub "${AWS::StackName}-ProtectDefaultLogGroupsAndBuckets-PolicyId"

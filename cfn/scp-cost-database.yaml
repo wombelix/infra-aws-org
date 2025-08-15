@@ -1,0 +1,117 @@
+# SPDX-FileCopyrightText: 2025 Dominik Wombacher <dominik@wombacher.cc>
+#
+# SPDX-License-Identifier: MIT-0
+
+AWSTemplateFormatVersion: '2010-09-09'
+Description: "Service Control Policies for AWS Organizations - Cost optimization policies"
+
+Parameters:
+  OrganizationRootId:
+    Type: String
+    Description: "AWS Organizations root ID (e.g., r-xxxx)"
+
+Resources:
+  # =============================================================================
+  # COST OPTIMIZATION POLICIES - DATABASE AND COMPUTE SERVICES
+  # =============================================================================
+
+  # Blocks expensive database and compute services with monthly minimums
+  # Why: Forces true pay-per-use serverless architecture with zero monthly minimums
+  DenyExpensiveDatabaseServices:
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Type: AWS::Organizations::Policy
+    Properties:
+      Type: SERVICE_CONTROL_POLICY
+      Name: DenyExpensiveDatabaseServices
+      Description: |
+        Block expensive database and compute services with monthly minimums - force true pay-per-use serverless.
+        See: https://docs.aws.amazon.com/whitepapers/latest/serverless-architectures-lambda/serverless-architectures-lambda.pdf
+      Content:
+        Version: 2012-10-17
+        Statement:
+          - Sid: DenyRDSAndAurora
+            Effect: Deny
+            Action:
+              - 'rds:*'
+            Resource: '*'
+          - Sid: DenyElastiCache
+            Effect: Deny
+            Action:
+              - 'elasticache:*'
+            Resource: '*'
+          - Sid: DenyRedshift
+            Effect: Deny
+            Action:
+              - 'redshift:*'
+              - 'redshift-data:*'
+              - 'redshift-serverless:*'
+            Resource: '*'
+          - Sid: DenyOpenSearch
+            Effect: Deny
+            Action:
+              - 'es:*'
+              - 'opensearch:*'
+            Resource: '*'
+          - Sid: DenyMemoryDB
+            Effect: Deny
+            Action:
+              - 'memorydb:*'
+            Resource: '*'
+          - Sid: DenyDocumentDB
+            Effect: Deny
+            Action:
+              - 'docdb:*'
+            Resource: '*'
+          - Sid: DenyNeptune
+            Effect: Deny
+            Action:
+              - 'neptune:*'
+              - 'neptune-db:*'
+            Resource: '*'
+          - Sid: DenyKinesis
+            Effect: Deny
+            Action:
+              - 'kinesis:*'
+              - 'kinesisanalytics:*'
+              - 'kinesisanalyticsv2:*'
+              - 'kinesisvideo:*'
+            Resource: '*'
+          - Sid: DenyMSK
+            Effect: Deny
+            Action:
+              - 'kafka:*'
+              - 'kafka-cluster:*'
+            Resource: '*'
+          - Sid: DenyEKS
+            Effect: Deny
+            Action:
+              - 'eks:*'
+            Resource: '*'
+          - Sid: DenyEMR
+            Effect: Deny
+            Action:
+              - 'emr:*'
+              - 'emr-containers:*'
+              - 'emr-serverless:*'
+            Resource: '*'
+          - Sid: DenyECSPersistentServices
+            Effect: Deny
+            Action:
+              - 'ecs:CreateCluster'
+              - 'ecs:CreateService'
+              - 'ecs:UpdateService'
+              - 'ecs:CreateCapacityProvider'
+              - 'ecs:PutClusterCapacityProviders'
+            Resource: '*'
+      TargetIds:
+        - !Ref OrganizationRootId
+
+
+
+Outputs:
+  DenyExpensiveDatabaseServicesPolicyId:
+    Description: Expensive DB Services Deny SCP Policy ID
+    Value: !Ref DenyExpensiveDatabaseServices
+    Export:
+      Name: !Sub "${AWS::StackName}-DenyExpensiveDatabaseServices-PolicyId"

@@ -1,0 +1,135 @@
+# SPDX-FileCopyrightText: 2025 Dominik Wombacher <dominik@wombacher.cc>
+#
+# SPDX-License-Identifier: MIT-0
+
+AWSTemplateFormatVersion: '2010-09-09'
+Description: "Service Control Policies for AWS Organizations - Cost optimization policies for ec2 services"
+
+Parameters:
+  OrganizationRootId:
+    Type: String
+    Description: "AWS Organizations root ID (e.g., r-xxxx)"
+
+Resources:
+  # =============================================================================
+  # COST OPTIMIZATION POLICIES - EC2 SERVICES
+  # =============================================================================
+
+  # Blocks all EC2 instance launches
+  # Why: Enforces serverless-first architecture and prevents unexpected compute costs
+  DenyRunInstances:
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Type: AWS::Organizations::Policy
+    Properties:
+      Type: SERVICE_CONTROL_POLICY
+      Name: DenyRunInstances
+      Description: |
+        Block all EC2 instance launches to enforce serverless-first architecture and prevent unexpected compute costs.
+        See: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-best-practices.html
+      Content:
+        Version: 2012-10-17
+        Statement:
+          - Sid: DenyRunInstances
+            Effect: Deny
+            Action:
+              - 'ec2:RunInstances'
+            Resource: '*'
+      TargetIds:
+        - !Ref OrganizationRootId
+
+  # Blocks expensive storage features with provisioned capacity or hourly charges
+  # Why: Forces cost-effective storage options and prevents accidental high-cost configurations
+  DenyExpensiveStorageFeatures:
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Type: AWS::Organizations::Policy
+    Properties:
+      Type: SERVICE_CONTROL_POLICY
+      Name: DenyExpensiveStorageFeatures
+      Description: |
+        Block expensive storage features with provisioned capacity or hourly charges.
+        See: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/EBSVolumeTypes.html
+      Content:
+        Version: 2012-10-17
+        Statement:
+          - Sid: DenyProvisionedIOPS
+            Effect: Deny
+            Action:
+              - 'ec2:CreateVolume'
+              - 'ec2:ModifyVolume'
+            Resource: '*'
+            Condition:
+              StringNotEquals:
+                'ec2:VolumeType': 'gp3'
+          - Sid: DenyEFSProvisionedThroughput
+            Effect: Deny
+            Action:
+              - 'elasticfilesystem:CreateFileSystem'
+              - 'elasticfilesystem:ModifyThroughputMode'
+            Resource: '*'
+            Condition:
+              StringEquals:
+                'elasticfilesystem:ThroughputMode': 'provisioned'
+          - Sid: DenyFSx
+            Effect: Deny
+            Action:
+              - 'fsx:*'
+            Resource: '*'
+      TargetIds:
+        - !Ref OrganizationRootId
+
+  # Blocks expensive networking features with hourly charges
+  # Why: Prevents accidental creation of costly networking resources
+  DenyExpensiveNetworkingFeatures:
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Type: AWS::Organizations::Policy
+    Properties:
+      Type: SERVICE_CONTROL_POLICY
+      Name: DenyExpensiveNetworkingFeatures
+      Description: |
+        Block expensive networking features with hourly charges.
+        See: https://docs.aws.amazon.com/vpc/latest/userguide/vpc-endpoints.html
+      Content:
+        Version: 2012-10-17
+        Statement:
+          - Sid: DenyVPCInterfaceEndpoints
+            Effect: Deny
+            Action:
+              - 'ec2:CreateVpcEndpoint'
+            Resource: '*'
+            Condition:
+              StringNotEquals:
+                'ec2:VpceServiceName':
+                  - 'com.amazonaws.*.s3'
+                  - 'com.amazonaws.*.dynamodb'
+          - Sid: DenyLoadBalancers
+            Effect: Deny
+            Action:
+              - 'elasticloadbalancing:CreateLoadBalancer'
+            Resource: '*'
+          - Sid: DenyNATGateway
+            Effect: Deny
+            Action:
+              - 'ec2:CreateNatGateway'
+            Resource: '*'
+      TargetIds:
+        - !Ref OrganizationRootId
+
+Outputs:
+  DenyRunInstancesPolicyId:
+    Description: EC2 Run Instances Deny SCP Policy ID
+    Value: !Ref DenyRunInstances
+    Export:
+      Name: !Sub "${AWS::StackName}-DenyRunInstances-PolicyId"
+  DenyExpensiveStorageFeaturesPolicyId:
+    Description: Expensive Storage Features Deny SCP Policy ID
+    Value: !Ref DenyExpensiveStorageFeatures
+    Export:
+      Name: !Sub "${AWS::StackName}-DenyExpensiveStorageFeatures-PolicyId"
+  DenyExpensiveNetworkingFeaturesPolicyId:
+    Description: Expensive Networking Features Deny SCP Policy ID
+    Value: !Ref DenyExpensiveNetworkingFeatures
+    Export:
+      Name: !Sub "${AWS::StackName}-DenyExpensiveNetworkingFeatures-PolicyId"

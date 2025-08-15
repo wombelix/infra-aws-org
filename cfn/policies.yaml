@@ -1,0 +1,204 @@
+# SPDX-FileCopyrightText: 2025 Dominik Wombacher <dominik@wombacher.cc>
+#
+# SPDX-License-Identifier: MIT-0
+
+AWSTemplateFormatVersion: '2010-09-09'
+Description: "Other AWS Organization-wide Policies (Tag, AI Opt-Out, Chatbot, etc.)"
+
+Parameters:
+  OrganizationRootId:
+    Type: String
+    Description: "AWS Organizations root ID (e.g., r-xxxx)"
+
+Resources:
+  # Organization-wide tagging standards for cost tracking and resource management
+  # Why: Enables cost allocation, resource tracking, and automated governance
+  BasicTaggingStandards:
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Type: AWS::Organizations::Policy
+    Properties:
+      Type: TAG_POLICY
+      Name: BasicTaggingStandards
+      Description: |
+        Organization-wide tagging standards for cost tracking and resource management.
+        See: https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_policies_tag-policies.html
+      Content:
+        tags:
+          purpose:
+            tag_key:
+              '@@assign': Purpose
+              '@@operators_allowed_for_child_policies':
+                - '@@none'
+            tag_value:
+              '@@assign':
+                - AWSOrg
+                - Business
+                - Personal
+                - Experimental
+              '@@operators_allowed_for_child_policies':
+                - '@@none'
+          lifecycle:
+            tag_key:
+              '@@assign': Lifecycle
+              '@@operators_allowed_for_child_policies':
+                - '@@none'
+            tag_value:
+              '@@assign':
+                - Active
+                - Deprecated
+                - Retained
+              '@@operators_allowed_for_child_policies':
+                - '@@none'
+          environment:
+            tag_key:
+              '@@assign': Environment
+            tag_value:
+              '@@assign':
+                - Production
+                - Testing
+                - Development
+              '@@operators_allowed_for_child_policies':
+                - '@@none'
+          creator:
+            tag_key:
+              '@@assign': Creator
+              '@@operators_allowed_for_child_policies':
+                - '@@none'
+            tag_value:
+              '@@assign':
+                - OpenTofu
+                - Manual
+                - CloudFormation
+              '@@operators_allowed_for_child_policies':
+                - '@@none'
+      TargetIds:
+        - !Ref OrganizationRootId
+
+  # Opts out of all AI services by default, allows child OUs to override
+  # Why: Ensures data privacy by preventing automatic AI service data usage
+  OptOutAllAIServices:
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Type: AWS::Organizations::Policy
+    Properties:
+      Type: AISERVICES_OPT_OUT_POLICY
+      Name: OptOutAllAIServices
+      Description: |
+        Opt-Out by default, allow child OUs to override.
+        See: https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_policies_ai-opt-out.html
+      Content:
+        services:
+          default:
+            '@@operators_allowed_for_child_policies':
+              - '@@none'
+            opt_out_policy:
+              '@@operators_allowed_for_child_policies':
+                - '@@none'
+              '@@assign': optOut
+      TargetIds:
+        - !Ref OrganizationRootId
+
+  # Disables AWS Chatbot access for Chime, Microsoft Teams, and Slack platforms
+  # Why: Prevents potential data leakage through chat integrations
+  DisableChimeTeamsSlackAccessToAccounts:
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Type: AWS::Organizations::Policy
+    Properties:
+      Type: CHATBOT_POLICY
+      Name: DisableChimeTeamsSlackAccessToAccounts
+      Description: |
+        Disables AWS Chatbot access for Chime, Microsoft Teams, and Slack platforms across all accounts.
+        See: https://docs.aws.amazon.com/chatbot/latest/adminguide/what-is.html
+      Content:
+        chatbot:
+          platforms:
+            chime:
+              client:
+                '@@assign': disabled
+            slack:
+              client:
+                '@@assign': disabled
+            microsoft_teams:
+              client:
+                '@@assign': disabled
+          default:
+            client:
+              '@@assign': disabled
+      TargetIds:
+        - !Ref OrganizationRootId
+
+  # Enforces EC2 security defaults across all accounts
+  # Why: Implements security best practices for EC2 instances when they are used
+  EC2SecurityDefaults:
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Type: AWS::Organizations::Policy
+    Properties:
+      Type: DECLARATIVE_POLICY_EC2
+      Name: EC2SecurityDefaults
+      Description: |
+        Enforce EC2 security defaults - disable serial console, block public images/snapshots, require IMDSv2.
+        See: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-best-practices.html
+      Content:
+        ec2_attributes:
+          serial_console_access:
+            status:
+              '@@assign': disabled
+          image_block_public_access:
+            state:
+              '@@assign': block_new_sharing
+          snapshot_block_public_access:
+            state:
+              '@@assign': block_new_sharing
+          allowed_images_settings:
+            state:
+              '@@assign': enabled
+            image_criteria:
+              criteria_1:
+                allowed_image_providers:
+                  '@@assign':
+                    - amazon
+          instance_metadata_defaults:
+            http_tokens:
+              '@@assign': required
+            http_put_response_hop_limit:
+              '@@assign': '2'
+            http_endpoint:
+              '@@assign': enabled
+            instance_metadata_tags:
+              '@@assign': enabled
+          vpc_block_public_access:
+            internet_gateway_block:
+              mode:
+                '@@assign': block_bidirectional
+              exclusions_allowed:
+                '@@assign': enabled
+      TargetIds:
+        - !Ref OrganizationRootId
+
+Outputs:
+  BasicTaggingStandardsPolicyId:
+    Description: Basic Tagging Standards Policy ID
+    Value: !Ref BasicTaggingStandards
+    Export:
+      Name: !Sub "${AWS::StackName}-BasicTaggingStandards-PolicyId"
+
+  OptOutAllAIServicesPolicyId:
+    Description: AI Services Opt-Out Policy ID
+    Value: !Ref OptOutAllAIServices
+    Export:
+      Name: !Sub "${AWS::StackName}-OptOutAllAIServices-PolicyId"
+
+  DisableChimeTeamsSlackPolicyId:
+    Description: Chatbot Policy ID
+    Value: !Ref DisableChimeTeamsSlackAccessToAccounts
+    Export:
+      Name: !Sub "${AWS::StackName}-DisableChimeTeamsSlack-PolicyId"
+
+  EC2SecurityDefaultsPolicyId:
+    Description: EC2 Security Defaults SCP Policy ID
+    Value: !Ref EC2SecurityDefaults
+    Export:
+      Name: !Sub "${AWS::StackName}-EC2SecurityDefaults-PolicyId"

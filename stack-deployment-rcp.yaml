@@ -1,0 +1,13 @@
+# SPDX-FileCopyrightText: 2025 Dominik Wombacher <dominik@wombacher.cc>
+#
+# SPDX-License-Identifier: MIT-0
+
+template-file-path: cfn/rcp.yaml
+parameters:
+  OrganizationId: o-37w8eaobo2
+  GitHubRepos: wombelix/*
+tags:
+  Purpose: AWSOrg
+  Lifecycle: Active
+  Environment: Production
+  Creator: CloudFormation

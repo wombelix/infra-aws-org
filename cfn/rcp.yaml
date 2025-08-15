@@ -1,0 +1,111 @@
+# SPDX-FileCopyrightText: 2025 Dominik Wombacher <dominik@wombacher.cc>
+#
+# SPDX-License-Identifier: MIT-0
+
+AWSTemplateFormatVersion: '2010-09-09'
+Description: "Resource Control Policies for AWS Organizations - encryption, secure transport, org-only access, OIDC restrictions"
+
+Parameters:
+  OrganizationId:
+    Type: String
+    Description: "AWS Organization ID (e.g., o-xxxxxxxxxx)"
+  GitHubRepos:
+    Type: CommaDelimitedList
+    Description: "GitHub repositories allowed for OIDC (format: org/repo or org/* for all repos)"
+
+Resources:
+  # Comprehensive resource control policies for security and compliance
+  # Why: Enforces encryption, secure transport, and organization-only access
+  ResourceControlPolicies:
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Type: AWS::Organizations::Policy
+    Properties:
+      Type: RESOURCE_CONTROL_POLICY
+      Name: ResourceControlPolicies
+      Description: |
+        Comprehensive resource control policies for security and compliance (encryption, secure transport, org-only access, OIDC restrictions).
+        See: https://docs.aws.amazon.com/IAM/latest/UserGuide/best-practices.html
+      Content:
+        Version: 2012-10-17
+        Statement:
+          - Sid: EnforceSecureTransport
+            Effect: Deny
+            Principal: '*'
+            Action:
+              - 'sts:*'
+              - 's3:*'
+              - 'sqs:*'
+              - 'secretsmanager:*'
+              - 'kms:*'
+            Resource: '*'
+            Condition:
+              BoolIfExists:
+                'aws:SecureTransport': 'false'
+          - Sid: EnforceS3TlsVersion
+            Effect: Deny
+            Principal: '*'
+            Action:
+              - 's3:*'
+            Resource: '*'
+            Condition:
+              NumericLessThan:
+                's3:TlsVersion':
+                  - '1.2'
+          - Sid: EnforceEncryption
+            Effect: Deny
+            Principal: '*'
+            Action:
+              - 's3:PutObject'
+            Resource: '*'
+            Condition:
+              'Null':
+                's3:x-amz-server-side-encryption': 'true'
+          - Sid: DenyS3PublicAccess
+            Effect: Deny
+            Principal: '*'
+            Action:
+              - 's3:PutBucketAcl'
+              - 's3:PutBucketPolicy'
+              - 's3:PutObjectAcl'
+            Resource: '*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl':
+                  - 'public-read'
+                  - 'public-read-write'
+                  - 'authenticated-read'
+          - Sid: DenyExternalAccess
+            Effect: Deny
+            Principal: '*'
+            Action: '*'
+            Resource: '*'
+            Condition:
+              StringNotEquals:
+                'aws:PrincipalOrgID': !Ref OrganizationId
+              Bool:
+                'aws:PrincipalIsAWSService': 'false'
+          - Sid: RestrictOIDCToApprovedProviders
+            Effect: Deny
+            Principal: '*'
+            Action:
+              - 'sts:AssumeRoleWithWebIdentity'
+            Resource: '*'
+            Condition:
+              StringNotLike:
+                'token.actions.githubusercontent.com:sub': !Split
+                  - ','
+                  - !Sub
+                    - 'repo:${inner}'
+                    - inner: !Join
+                      - ',repo:'
+                      - !Ref GitHubRepos
+      TargetIds:
+        - !Ref OrganizationId
+
+Outputs:
+  ResourceControlPoliciesId:
+    Description: Resource Control Policies ID
+    Value: !Ref ResourceControlPolicies
+    Export:
+      Name: !Sub "${AWS::StackName}-ResourceControlPolicies-PolicyId"

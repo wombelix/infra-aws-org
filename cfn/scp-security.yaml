@@ -1,0 +1,196 @@
+# SPDX-FileCopyrightText: 2025 Dominik Wombacher <dominik@wombacher.cc>
+#
+# SPDX-License-Identifier: MIT-0
+
+AWSTemplateFormatVersion: '2010-09-09'
+Description: "Service Control Policies for AWS Organizations - Security and access control policies"
+
+Parameters:
+  OrganizationRootId:
+    Type: String
+    Description: "AWS Organizations root ID (e.g., r-xxxx)"
+
+Resources:
+  # =============================================================================
+  # SECURITY AND ACCESS CONTROL POLICIES
+  # Policies that enforce security best practices and access restrictions
+  # =============================================================================
+
+  # Restricts root user access to only essential actions that require root privileges
+  # Why: Follows AWS security best practices to minimize root user usage
+  RootUserDenyAllExceptActionsThatRequireRootAccess:
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Type: AWS::Organizations::Policy
+    Properties:
+      Type: SERVICE_CONTROL_POLICY
+      Name: RootUserDenyAllExceptActionsThatRequireRootAccess
+      Description: |
+        SCP to restrict root user in your member accounts, allowing only essential actions that require root privileges.
+        See: https://docs.aws.amazon.com/organizations/latest/userguide/best-practices_member-acct.html#bp_member-acct_use-scp
+      Content:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Deny
+            NotAction:
+              - 's3:GetBucketPolicy'
+              - 's3:PutBucketPolicy'
+              - 's3:DeleteBucketPolicy'
+            Resource: '*'
+            Condition:
+              StringLike:
+                'aws:PrincipalArn': 'arn:aws:iam::*:root'
+      TargetIds:
+        - !Ref OrganizationRootId
+
+  # Blocks high-risk security actions that could compromise the organization
+  # Why: Prevents accidental or malicious deletion of critical security controls
+  DenyHighRiskActions:
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Type: AWS::Organizations::Policy
+    Properties:
+      Type: SERVICE_CONTROL_POLICY
+      Name: DenyHighRiskActions
+      Description: |
+        Block high-risk security actions that could compromise the organization.
+        See: https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_policies_scps_examples.html#example-deny-delete-security-controls
+      Content:
+        Version: 2012-10-17
+        Statement:
+          - Sid: DenyConfigChanges
+            Effect: Deny
+            Action:
+              - 'config:DeleteConfigRule'
+              - 'config:DeleteConfigurationRecorder'
+              - 'config:DeleteDeliveryChannel'
+              - 'config:StopConfigurationRecorder'
+            Resource: '*'
+          - Sid: DenyGuardDutyChanges
+            Effect: Deny
+            Action:
+              - 'guardduty:DeleteDetector'
+              - 'guardduty:DeleteIPSet'
+              - 'guardduty:DeleteThreatIntelSet'
+              - 'guardduty:StopMonitoringMembers'
+            Resource: '*'
+      TargetIds:
+        - !Ref OrganizationRootId
+
+  # Prevents creation of new IAM Identity Center instances in member accounts
+  # Why: Centralizes identity management and prevents account sprawl
+  AWSSSODenyMemberAccountInstances:
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Type: AWS::Organizations::Policy
+    Properties:
+      Type: SERVICE_CONTROL_POLICY
+      Name: AWSSSODenyMemberAccountInstances
+      Description: |
+        Prevent creation of new account instances of IAM Identity Center.
+        See: https://docs.aws.amazon.com/singlesignon/latest/userguide/what-is.html#sso-accounts
+      Content:
+        Version: 2012-10-17
+        Statement:
+          - Sid: DenyMemberAccountInstances
+            Effect: Deny
+            Action:
+              - 'sso:CreateInstance'
+            Resource: '*'
+      TargetIds:
+        - !Ref OrganizationRootId
+
+  # Protects CloudTrail from deletion or modification
+  # Why: Ensures audit logging cannot be disabled, maintaining compliance and security
+  ProtectCloudTrail:
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Type: AWS::Organizations::Policy
+    Properties:
+      Type: SERVICE_CONTROL_POLICY
+      Name: ProtectCloudTrail
+      Description: |
+        Protect CloudTrail from deletion or modification.
+        See: https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-best-practices.html
+      Content:
+        Version: 2012-10-17
+        Statement:
+          - Sid: ProtectCloudTrail
+            Effect: Deny
+            Action:
+              - 'cloudtrail:DeleteTrail'
+              - 'cloudtrail:StopLogging'
+              - 'cloudtrail:UpdateTrail'
+            Resource: '*'
+      TargetIds:
+        - !Ref OrganizationRootId
+
+  # Prevents unauthorized account management and organization changes
+  # Why: Centralizes account management and prevents unauthorized billing access
+  DenyAccountManagementActions:
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Type: AWS::Organizations::Policy
+    Properties:
+      Type: SERVICE_CONTROL_POLICY
+      Name: DenyAccountManagementActions
+      Description: |
+        Prevent unauthorized account management and organization changes.
+        See: https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_policies_scps_examples.html#example-deny-account-management
+      Content:
+        Version: 2012-10-17
+        Statement:
+          - Sid: DenyBillingAccess
+            Effect: Deny
+            Action:
+              - 'aws-portal:*'
+              - 'budgets:*'
+              - 'ce:*'
+              - 'cur:*'
+            Resource: '*'
+          - Sid: DenyIAMUserCreation
+            Effect: Deny
+            Action:
+              - 'iam:CreateUser'
+              - 'iam:CreateAccessKey'
+            Resource: '*'
+          - Sid: DenyRootAccessKeys
+            Effect: Deny
+            Action:
+              - 'iam:CreateAccessKey'
+              - 'iam:DeleteAccessKey'
+              - 'iam:UpdateAccessKey'
+            Resource: 'arn:aws:iam::*:user/root'
+      TargetIds:
+        - !Ref OrganizationRootId
+
+Outputs:
+  RootUserDenyAllExceptActionsThatRequireRootAccessPolicyId:
+    Description: Root User Restriction SCP Policy ID
+    Value: !Ref RootUserDenyAllExceptActionsThatRequireRootAccess
+    Export:
+      Name: !Sub "${AWS::StackName}-RootUserDenyAllExceptActionsThatRequireRootAccess-PolicyId"
+
+  DenyAccountManagementActionsPolicyId:
+    Description: Account Management Actions Deny SCP Policy ID
+    Value: !Ref DenyAccountManagementActions
+    Export:
+      Name: !Sub "${AWS::StackName}-DenyAccountManagementActions-PolicyId"
+
+  DenyHighRiskActionsPolicyId:
+    Description: High Risk Actions Deny SCP Policy ID
+    Value: !Ref DenyHighRiskActions
+    Export:
+      Name: !Sub "${AWS::StackName}-DenyHighRiskActions-PolicyId"
+
+  AWSSSODenyMemberAccountInstancesPolicyId:
+    Description: SSO Member Account Instances Deny SCP Policy ID
+    Value: !Ref AWSSSODenyMemberAccountInstances
+    Export:
+      Name: !Sub "${AWS::StackName}-AWSSSODenyMemberAccountInstances-PolicyId"
+
+  ProtectCloudTrailPolicyId:
+    Description: CloudTrail Protection SCP Policy ID
+    Value: !Ref ProtectCloudTrail
+    Export:
+      Name: !Sub "${AWS::StackName}-ProtectCloudTrail-PolicyId"

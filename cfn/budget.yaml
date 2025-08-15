@@ -1,0 +1,128 @@
+# SPDX-FileCopyrightText: 2025 Dominik Wombacher <dominik@wombacher.cc>
+#
+# SPDX-License-Identifier: MIT-0
+
+AWSTemplateFormatVersion: '2010-09-09'
+Description: "Budget and Cost Anomaly Detection for AWS Organizations"
+
+Parameters:
+  BudgetAlertEmails:
+    Type: CommaDelimitedList
+    Description: Email addresses for budget and cost anomaly alerts
+
+Resources:
+  # Monthly cost budget with alerts at 75% and 100% thresholds
+  # Why: Proactive cost monitoring to prevent billing surprises
+  MonthlyCostBudget:
+    Type: AWS::Budgets::Budget
+    Properties:
+      Budget:
+        BudgetName: My Monthly Cost Budget
+        BudgetLimit:
+          Amount: 10
+          Unit: USD
+        TimeUnit: MONTHLY
+        BudgetType: COST
+        TimePeriod:
+          Start: "2025-07-01"
+      NotificationsWithSubscribers:
+        - Notification:
+            NotificationType: FORECASTED
+            ComparisonOperator: GREATER_THAN
+            Threshold: 75
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Select [0, !Ref BudgetAlertEmails]
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 75
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Select [0, !Ref BudgetAlertEmails]
+        - Notification:
+            NotificationType: FORECASTED
+            ComparisonOperator: GREATER_THAN
+            Threshold: 100
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Select [0, !Ref BudgetAlertEmails]
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 100
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Select [0, !Ref BudgetAlertEmails]
+
+  # Cost anomaly detection for serverless services
+  # Why: Free ML-powered anomaly detection to catch unexpected cost spikes
+  ServerlessCostAnomalyMonitor:
+    Type: AWS::CE::AnomalyMonitor
+    Properties:
+      MonitorName: ServerlessServicesAnomalies
+      MonitorType: CUSTOM
+      MonitorSpecification: |
+        {
+          "Dimensions": {
+            "Key": "SERVICE",
+            "Values": [
+              "Amazon Simple Storage Service",
+              "AWS Lambda",
+              "Amazon DynamoDB",
+              "Amazon API Gateway",
+              "AWS Step Functions",
+              "Amazon EventBridge",
+              "Amazon CloudWatch"
+            ],
+            "MatchOptions": [ "EQUALS" ]
+          }
+        }
+
+  # Cost anomaly subscription for email alerts
+  # Why: Get notified of cost anomalies above $5 threshold
+  CostAnomalySubscription:
+    Type: AWS::CE::AnomalySubscription
+    Properties:
+      SubscriptionName: ServerlessAnomalyAlerts
+      Frequency: DAILY
+      MonitorArnList:
+        - !Ref ServerlessCostAnomalyMonitor
+      Subscribers:
+        - Type: EMAIL
+          Address: !Select [0, !Ref BudgetAlertEmails]
+        - Type: EMAIL
+          Address: !Select [1, !Ref BudgetAlertEmails]
+      ThresholdExpression: |
+        {
+          "And": [{
+            "Dimensions": {
+              "Key": "ANOMALY_TOTAL_IMPACT_ABSOLUTE",
+              "Values": [ "5" ],
+              "MatchOptions": [ "GREATER_THAN_OR_EQUAL" ]
+            }
+          }]
+        }
+
+Outputs:
+  MonthlyCostBudgetId:
+    Description: Monthly Cost Budget ID
+    Value: !Ref MonthlyCostBudget
+    Export:
+      Name: !Sub "${AWS::StackName}-MonthlyCostBudget-Id"
+
+  ServerlessCostAnomalyMonitorId:
+    Description: Serverless Cost Anomaly Monitor ID
+    Value: !Ref ServerlessCostAnomalyMonitor
+    Export:
+      Name: !Sub "${AWS::StackName}-ServerlessCostAnomalyMonitor-Id"
+
+  CostAnomalySubscriptionId:
+    Description: Cost Anomaly Subscription ID
+    Value: !Ref CostAnomalySubscription
+    Export:
+      Name: !Sub "${AWS::StackName}-CostAnomalySubscription-Id"
