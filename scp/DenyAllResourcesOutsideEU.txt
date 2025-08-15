@@ -1,4 +1,0 @@
-Name: DenyAllResourcesOutsideEU
-Policy type: Service control policy (customer managed)
-Description: Except global services, deny all resource creation in Regions outside eu-central-1 and eu-west-1.
-Targets: Root

@@ -1,4 +1,0 @@
-Name: RootUserDenyAllExceptActionsThatRequireRootAccess
-Policy type: Service control policy (customer managed)
-Description: SCP to restrict root user in your member accounts. https://docs.aws.amazon.com/organizations/latest/userguide/best-practices_member-acct.html#bp_member-acct_use-scp
-Targets: All OUs below Root

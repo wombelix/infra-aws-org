@@ -1,4 +1,0 @@
-Name: OptOutAllAIServices
-Policy type: AI services opt-out policy (customer managed)
-Description: Out-Out by default, allow child OUs to override. https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_policies_ai-opt-out_syntax.html#ai-opt-out-policy-examples
-Targets: root
