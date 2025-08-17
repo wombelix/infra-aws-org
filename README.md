@@ -6,8 +6,8 @@ SPDX-License-Identifier: MIT-0
 
 # Infrastructure AWS Organizations
 
-[![REUSE status](https://api.reuse.software/badge/git.sr.ht/~wombelix/aws-organizations-policies)](https://api.reuse.software/info/git.sr.ht/~wombelix/aws-organizations-policies)
-[![builds.sr.ht status](https://builds.sr.ht/~wombelix/aws-organizations-policies.svg)](https://builds.sr.ht/~wombelix/aws-organizations-policies?)
+[![REUSE status](https://api.reuse.software/badge/git.sr.ht/~wombelix/infra-aws-org)](https://api.reuse.software/info/git.sr.ht/~wombelix/infra-aws-org)
+[![builds.sr.ht status](https://builds.sr.ht/~wombelix/infra-aws-org.svg)](https://builds.sr.ht/~wombelix/infra-aws-org?)
 
 ## Table of Contents
 
@@ -36,13 +36,13 @@ on GitHub and to use `cfn-stack.yaml` as entrypoint.
 ## Source
 
 The primary location is:
-[git.sr.ht/~wombelix/aws-organizations-policies](https://git.sr.ht/~wombelix/aws-organizations-policies)
+[git.sr.ht/~wombelix/infra-aws-org](https://git.sr.ht/~wombelix/infra-aws-org)
 
 Mirrors are available on
-[Codeberg](https://codeberg.org/wombelix/aws-organizations-policies),
-[Gitlab](https://gitlab.com/wombelix/aws-organizations-policies)
+[Codeberg](https://codeberg.org/wombelix/infra-aws-org),
+[Gitlab](https://gitlab.com/wombelix/infra-aws-org)
 and
-[GitHub](https://github.com/wombelix/aws-organizations-policies).
+[GitHub](https://github.com/wombelix/infra-aws-org).
 
 ## Contribute
 
