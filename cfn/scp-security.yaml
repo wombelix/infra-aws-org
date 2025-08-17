@@ -164,6 +164,72 @@ Resources:
       TargetIds:
         - !Ref OrganizationRootId
 
+  # Enforces S3 Block Public Access settings at the account level
+  # Why: Prevents accidental public exposure of S3 bucket contents
+  RequireS3BlockPublicAccess:
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Type: AWS::Organizations::Policy
+    Properties:
+      Type: SERVICE_CONTROL_POLICY
+      Name: RequireS3BlockPublicAccess
+      Description: |
+        Enforces S3 Block Public Access settings at the account level.
+        See: https://docs.aws.amazon.com/AmazonS3/latest/userguide/access-control-block-public-access.html
+      Content:
+        Version: 2012-10-17
+        Statement:
+          - Sid: DenyS3PutAccountPublicAccessBlockIfNotStrict
+            Effect: Deny
+            Action: "s3:PutAccountPublicAccessBlock"
+            Resource: "*"
+            Condition:
+              StringNotEquals:
+                "s3:BlockPublicAcls": "true"
+                "s3:BlockPublicPolicy": "true"
+                "s3:IgnorePublicAcls": "true"
+                "s3:RestrictPublicBuckets": "true"
+      TargetIds:
+        - !Ref OrganizationRootId
+
+  # Enforces MFA for sensitive actions
+  # Why: Adds an additional layer of security for critical operations
+  EnforceMFAForSensitiveActions:
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Type: AWS::Organizations::Policy
+    Properties:
+      Type: SERVICE_CONTROL_POLICY
+      Name: EnforceMFAForSensitiveActions
+      Description: |
+        Enforces MFA for sensitive actions, with an exception for automation roles.
+        See: https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_condition-keys.html#ck_MultiFactorAuthPresent
+      Content:
+        Version: 2012-10-17
+        Statement:
+          - Sid: DenySensitiveActionsWithoutMFA
+            Effect: Deny
+            Action:
+              - "aws-portal:ModifyBilling"
+              - "aws-portal:ModifyPaymentMethods"
+              - "iam:DeleteAccessKey"
+              - "iam:DeleteRole"
+              - "iam:DeleteUser"
+              - "iam:UpdateAccountPasswordPolicy"
+              - "organizations:LeaveOrganization"
+              - "s3:DeleteBucket"
+              - "ec2:TerminateInstances"
+            Resource: "*"
+            Condition:
+              BoolIfExists:
+                "aws:MultiFactorAuthPresent": "false"
+              StringNotEqualsIfExists:
+                "aws:PrincipalTag/AutomationPrincipal": "true"
+              ArnNotLike:
+                "aws:PrincipalARN": "arn:aws:iam::*:role/AWSCloudFormationStackSetExecutionRole"
+      TargetIds:
+        - !Ref OrganizationRootId
+
 Outputs:
   RootUserDenyAllExceptActionsThatRequireRootAccessPolicyId:
     Description: Root User Restriction SCP Policy ID
