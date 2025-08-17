@@ -1,0 +1,28 @@
+# SPDX-FileCopyrightText: 2025 Dominik Wombacher <dominik@wombacher.cc>
+#
+# SPDX-License-Identifier: MIT-0
+
+AWSTemplateFormatVersion: '2010-09-09'
+Description: "IAM Account Password Policy"
+
+Metadata:
+  cfn-lint:
+    config:
+      ignore_checks:
+        - E3006 # Global resource
+
+Resources:
+  # Sets the account password policy for all IAM users
+  # Why: Enforces strong password requirements to enhance security.
+  # Reference: https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_passwords_account-policy.html
+  IAMAccountPasswordPolicy:
+    Type: AWS::IAM::AccountPasswordPolicy
+    Properties:
+      MinimumPasswordLength: 32
+      RequireLowercaseCharacters: true
+      RequireNumbers: true
+      RequireSymbols: true
+      RequireUppercaseCharacters: true
+      AllowUsersToChangePassword: true
+      PasswordReusePrevention: 24
+      MaxPasswordAge: 90

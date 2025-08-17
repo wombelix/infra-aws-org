@@ -1,0 +1,11 @@
+# SPDX-FileCopyrightText: 2025 Dominik Wombacher <dominik@wombacher.cc>
+#
+# SPDX-License-Identifier: MIT-0
+
+template-file-path: cfn/stackset.yaml
+parameters: {}
+tags:
+  Purpose: AWSOrg
+  Lifecycle: Active
+  Environment: Production
+  Creator: CloudFormation
