@@ -6,9 +6,9 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: "Budget and Cost Anomaly Detection for AWS Organizations"
 
 Parameters:
-  BudgetAlertEmails:
-    Type: CommaDelimitedList
-    Description: Email addresses for budget and cost anomaly alerts
+  BudgetAlertSnsTopicArn:
+    Type: String
+    Description: SNS topic ARN for budget and cost anomaly alerts
 
 Resources:
   # Monthly cost budget with alerts at 75% and 100% thresholds
@@ -32,32 +32,32 @@ Resources:
             Threshold: 75
             ThresholdType: PERCENTAGE
           Subscribers:
-            - SubscriptionType: EMAIL
-              Address: !Select [0, !Ref BudgetAlertEmails]
+            - SubscriptionType: SNS
+              Address: !Ref BudgetAlertSnsTopicArn
         - Notification:
             NotificationType: ACTUAL
             ComparisonOperator: GREATER_THAN
             Threshold: 75
             ThresholdType: PERCENTAGE
           Subscribers:
-            - SubscriptionType: EMAIL
-              Address: !Select [0, !Ref BudgetAlertEmails]
+            - SubscriptionType: SNS
+              Address: !Ref BudgetAlertSnsTopicArn
         - Notification:
             NotificationType: FORECASTED
             ComparisonOperator: GREATER_THAN
             Threshold: 100
             ThresholdType: PERCENTAGE
           Subscribers:
-            - SubscriptionType: EMAIL
-              Address: !Select [0, !Ref BudgetAlertEmails]
+            - SubscriptionType: SNS
+              Address: !Ref BudgetAlertSnsTopicArn
         - Notification:
             NotificationType: ACTUAL
             ComparisonOperator: GREATER_THAN
             Threshold: 100
             ThresholdType: PERCENTAGE
           Subscribers:
-            - SubscriptionType: EMAIL
-              Address: !Select [0, !Ref BudgetAlertEmails]
+            - SubscriptionType: SNS
+              Address: !Ref BudgetAlertSnsTopicArn
 
   # Cost anomaly detection for serverless services
   # Why: Free ML-powered anomaly detection to catch unexpected cost spikes
@@ -93,10 +93,8 @@ Resources:
       MonitorArnList:
         - !Ref ServerlessCostAnomalyMonitor
       Subscribers:
-        - Type: EMAIL
-          Address: !Select [0, !Ref BudgetAlertEmails]
-        - Type: EMAIL
-          Address: !Select [1, !Ref BudgetAlertEmails]
+        - Type: SNS
+          Address: !Ref BudgetAlertSnsTopicArn
       ThresholdExpression: |
         {
           "And": [{

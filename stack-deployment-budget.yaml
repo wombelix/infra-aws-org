@@ -4,7 +4,7 @@
 
 template-file-path: cfn/budget.yaml
 parameters:
-  BudgetAlertEmails: dominik@wombacher.cc,dw@wombacher.it
+  BudgetAlertSnsTopicArn: arn:aws:sns:eu-central-1:992382651568:Notifications
 tags:
   Purpose: AWSOrg
   Lifecycle: Active
