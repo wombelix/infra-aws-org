@@ -131,3 +131,9 @@ Outputs:
     Value: !Ref ResourceControlPolicies
     Export:
       Name: !Sub "${AWS::StackName}-ResourceControlPolicies-PolicyId"
+
+  RCPRestrictOIDCToApprovedProvidersId:
+    Description: RCP Restrict OIDC to Approved Providers ID
+    Value: !Ref RCPRestrictOIDCToApprovedProviders
+    Export:
+      Name: !Sub "${AWS::StackName}-RCPRestrictOIDCToApprovedProviders-PolicyId"
