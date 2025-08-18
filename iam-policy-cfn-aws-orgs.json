@@ -14,7 +14,9 @@
         "organizations:DescribePolicy",
         "organizations:ListTargetsForPolicy",
         "organizations:ListRoots",
-        "organizations:DescribeOrganization"
+        "organizations:DescribeOrganization",
+        "organizations:PutResourcePolicy",
+        "organizations:DescribeResourcePolicy"
       ],
       "Resource": "*"
     },

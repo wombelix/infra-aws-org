@@ -7,8 +7,8 @@
 set -euo pipefail
 
 # Configuration
-ROLE_NAME="AWSOrganizationsCloudFormationRole"
-POLICY_NAME="AWSOrganizationsCloudFormationPolicy"
+ROLE_NAME="CustomerServiceRoleForCloudformationInfraAWSOrg"
+POLICY_NAME="CustomerPolicyForCloudformationInfraAWSOrg"
 POLICY_FILE="iam-policy-cfn-aws-orgs.json"
 
 log() {
