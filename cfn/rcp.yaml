@@ -75,11 +75,23 @@ Resources:
                   - 'public-read'
                   - 'public-read-write'
                   - 'authenticated-read'
+          # https://aws.amazon.com/blogs/aws/introducing-resource-control-policies-rcps-a-new-authorization-policy/
+          # https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_policies_rcps.html
           - Sid: EnforceOrgIdentities
             Effect: Deny
             Principal: '*'
+            # RCPs are available in all commercial AWS Regions and, at launch, the following services are supported:
+            # Amazon Simple Storage Service (Amazon S3), AWS Security Token Service (AWS STS),
+            # AWS Key Management Service (AWS KMS), Amazon Simple Queue Service (Amazon SQS), and AWS Secrets Manager.
+            # https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_policies_rcps_syntax.html#rcp-syntax-action
             Action:
               - 's3:*'
+              - 'sts:*'
+              - 'kms:*'
+              - 'sqs:*'
+              - 'secretsmanager:*'
+              - 'ecr:*'
+              - 'aoss:*'
             Resource: '*'
             Condition:
               StringNotEqualsIfExists:
