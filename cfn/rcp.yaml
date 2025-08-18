@@ -9,9 +9,9 @@ Parameters:
   OrganizationRootId:
     Type: String
     Description: "AWS Organizations root ID (e.g., r-xxxx)"
-  GitHubRepos:
-    Type: CommaDelimitedList
-    Description: "GitHub repositories allowed for OIDC (format: org/repo or org/* for all repos)"
+  GitHubRepo:
+    Type: String
+    Description: "GitHub repository allowed for OIDC (format: org/repo or org/* for all repos)"
 
 Resources:
   # Comprehensive resource control policies for security and compliance
@@ -92,14 +92,8 @@ Resources:
               - 'sts:AssumeRoleWithWebIdentity'
             Resource: '*'
             Condition:
-              StringNotLike:
-                'token.actions.githubusercontent.com:sub': !Split
-                  - ','
-                  - !Sub
-                    - 'repo:${inner}'
-                    - inner: !Join
-                      - ',repo:'
-                      - !Ref GitHubRepos
+             StringNotLike:
+               'token.actions.githubusercontent.com:sub': !Sub 'repo:${GitHubRepo}:*'
       TargetIds:
         - !Ref OrganizationRootId
 
