@@ -26,3 +26,10 @@ Resources:
       AllowUsersToChangePassword: true
       PasswordReusePrevention: 24
       MaxPasswordAge: 90
+
+Outputs:
+  IAMAccountPasswordPolicyId:
+    Description: IAM Account Password Policy ID
+    Value: !Ref IAMAccountPasswordPolicy
+    Export:
+      Name: !Sub "${AWS::StackName}-IAMAccountPasswordPolicy-Id"
