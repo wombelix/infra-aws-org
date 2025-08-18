@@ -10,3 +10,4 @@ tags:
   Lifecycle: Active
   Environment: Production
   Creator: CloudFormation
+  DoNotDelete: True
