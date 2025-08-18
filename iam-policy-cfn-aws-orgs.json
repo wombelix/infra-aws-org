@@ -40,7 +40,9 @@
       "Effect": "Allow",
       "Action": [
         "budgets:ModifyBudget",
-        "budgets:ViewBudget"
+        "budgets:ViewBudget",
+        "budgets:TagResource",
+        "budgets:ListTagsForResource"
       ],
       "Resource": "*"
     },
@@ -55,7 +57,9 @@
         "ce:CreateAnomalySubscription",
         "ce:UpdateAnomalySubscription",
         "ce:DeleteAnomalySubscription",
-        "ce:GetAnomalySubscriptions"
+        "ce:GetAnomalySubscriptions",
+        "ce:TagResource",
+        "ce:ListTagsForResource"
       ],
       "Resource": "*"
     },
