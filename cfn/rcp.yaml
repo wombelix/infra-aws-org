@@ -75,15 +75,15 @@ Resources:
                   - 'public-read'
                   - 'public-read-write'
                   - 'authenticated-read'
-          - Sid: DenyExternalAccess
+          - Sid: EnforceOrgIdentities
             Effect: Deny
             Principal: '*'
             Action: '*'
             Resource: '*'
             Condition:
-              StringNotEquals:
+              StringNotEqualsIfExists:
                 'aws:PrincipalOrgID': !Ref OrganizationId
-              Bool:
+              BoolIfExists:
                 'aws:PrincipalIsAWSService': 'false'
       TargetIds:
         - !Ref OrganizationRootId
