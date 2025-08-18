@@ -6,9 +6,9 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: "Resource Control Policies for AWS Organizations - encryption, secure transport, org-only access, OIDC restrictions"
 
 Parameters:
-  OrganizationId:
+  OrganizationRootId:
     Type: String
-    Description: "AWS Organization ID (e.g., o-xxxxxxxxxx)"
+    Description: "AWS Organizations root ID (e.g., r-xxxx)"
   GitHubRepos:
     Type: CommaDelimitedList
     Description: "GitHub repositories allowed for OIDC (format: org/repo or org/* for all repos)"
@@ -82,7 +82,7 @@ Resources:
             Resource: '*'
             Condition:
               StringNotEquals:
-                'aws:PrincipalOrgID': !Ref OrganizationId
+                'aws:PrincipalOrgID': !Ref OrganizationRootId
               Bool:
                 'aws:PrincipalIsAWSService': 'false'
           - Sid: RestrictOIDCToApprovedProviders
@@ -101,7 +101,7 @@ Resources:
                       - ',repo:'
                       - !Ref GitHubRepos
       TargetIds:
-        - !Ref OrganizationId
+        - !Ref OrganizationRootId
 
 Outputs:
   ResourceControlPoliciesId:

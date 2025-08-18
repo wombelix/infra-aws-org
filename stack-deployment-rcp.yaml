@@ -4,7 +4,7 @@
 
 template-file-path: cfn/rcp.yaml
 parameters:
-  OrganizationId: o-37w8eaobo2
+  OrganizationRootId: r-lp71
   GitHubRepos: wombelix/*
 tags:
   Purpose: AWSOrg
