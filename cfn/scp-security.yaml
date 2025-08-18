@@ -64,6 +64,7 @@ Resources:
   # Blocks high-risk security actions that could compromise the organization
   # Why: Prevents accidental or malicious deletion of critical security controls
   DenyHighRiskActions:
+    DependsOn: RootUserDenyAllExceptActionsThatRequireRootAccess
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Type: AWS::Organizations::Policy
@@ -98,6 +99,7 @@ Resources:
   # Prevents creation of new IAM Identity Center instances in member accounts
   # Why: Centralizes identity management and prevents account sprawl
   AWSSSODenyMemberAccountInstances:
+    DependsOn: DenyHighRiskActions
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Type: AWS::Organizations::Policy
@@ -121,6 +123,7 @@ Resources:
   # Protects CloudTrail from deletion or modification
   # Why: Ensures audit logging cannot be disabled, maintaining compliance and security
   ProtectCloudTrail:
+    DependsOn: AWSSSODenyMemberAccountInstances
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Type: AWS::Organizations::Policy
@@ -146,6 +149,7 @@ Resources:
   # Prevents unauthorized account management and organization changes
   # Why: Centralizes account management and prevents unauthorized billing access
   DenyAccountManagementActions:
+    DependsOn: ProtectCloudTrail
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Type: AWS::Organizations::Policy
@@ -185,6 +189,7 @@ Resources:
   # Enforces S3 Block Public Access settings at the account level
   # Why: Prevents accidental public exposure of S3 bucket contents
   RequireS3BlockPublicAccess:
+    DependsOn: DenyAccountManagementActions
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Type: AWS::Organizations::Policy
@@ -213,6 +218,7 @@ Resources:
   # Enforces MFA for sensitive actions
   # Why: Adds an additional layer of security for critical operations
   EnforceMFAForSensitiveActions:
+    DependsOn: RequireS3BlockPublicAccess
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Type: AWS::Organizations::Policy
