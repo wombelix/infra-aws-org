@@ -6,7 +6,7 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: "Budget and Cost Anomaly Detection for AWS Organizations"
 
 Parameters:
-  BudgetAlertSnsTopicArn:
+  AlertSnsTopicArn:
     Type: String
     Description: SNS topic ARN for budget and cost anomaly alerts
 
@@ -17,7 +17,7 @@ Resources:
     Type: AWS::Budgets::Budget
     Properties:
       Budget:
-        BudgetName: My Monthly Cost Budget
+        BudgetName: Default Cost Budget
         BudgetLimit:
           Amount: 10
           Unit: USD
@@ -33,7 +33,7 @@ Resources:
             ThresholdType: PERCENTAGE
           Subscribers:
             - SubscriptionType: SNS
-              Address: !Ref BudgetAlertSnsTopicArn
+              Address: !Ref AlertSnsTopicArn
         - Notification:
             NotificationType: ACTUAL
             ComparisonOperator: GREATER_THAN
@@ -41,7 +41,7 @@ Resources:
             ThresholdType: PERCENTAGE
           Subscribers:
             - SubscriptionType: SNS
-              Address: !Ref BudgetAlertSnsTopicArn
+              Address: !Ref AlertSnsTopicArn
         - Notification:
             NotificationType: FORECASTED
             ComparisonOperator: GREATER_THAN
@@ -49,7 +49,7 @@ Resources:
             ThresholdType: PERCENTAGE
           Subscribers:
             - SubscriptionType: SNS
-              Address: !Ref BudgetAlertSnsTopicArn
+              Address: !Ref AlertSnsTopicArn
         - Notification:
             NotificationType: ACTUAL
             ComparisonOperator: GREATER_THAN
@@ -57,53 +57,35 @@ Resources:
             ThresholdType: PERCENTAGE
           Subscribers:
             - SubscriptionType: SNS
-              Address: !Ref BudgetAlertSnsTopicArn
+              Address: !Ref AlertSnsTopicArn
 
-  # Cost anomaly detection for serverless services
+  # Cost anomaly detection for all AWS services
   # Why: Free ML-powered anomaly detection to catch unexpected cost spikes
-  ServerlessCostAnomalyMonitor:
+  CostAnomalyDefaultServicesMonitor:
     Type: AWS::CE::AnomalyMonitor
     Properties:
-      MonitorName: ServerlessServicesAnomalies
-      MonitorType: CUSTOM
-      MonitorSpecification: |
-        {
-          "Dimensions": {
-            "Key": "SERVICE",
-            "Values": [
-              "Amazon Simple Storage Service",
-              "AWS Lambda",
-              "Amazon DynamoDB",
-              "Amazon API Gateway",
-              "AWS Step Functions",
-              "Amazon EventBridge",
-              "Amazon CloudWatch"
-            ],
-            "MatchOptions": [ "EQUALS" ]
-          }
-        }
+      MonitorName: Default-Services-Monitor
+      MonitorType: DIMENSIONAL
+      MonitorDimension: SERVICE
 
-  # Cost anomaly subscription for email alerts
+  # Cost anomaly subscription for sns topic
   # Why: Get notified of cost anomalies above $5 threshold
-  CostAnomalySubscription:
+  CostAnomalyDefaultServicesSubscription:
     Type: AWS::CE::AnomalySubscription
     Properties:
-      SubscriptionName: ServerlessAnomalyAlerts
-      Frequency: DAILY
+      SubscriptionName: Default-Services-Subscription
+      Frequency: IMMEDIATE
       MonitorArnList:
-        - !Ref ServerlessCostAnomalyMonitor
+        - !Ref CostAnomalyDefaultServicesMonitor
       Subscribers:
         - Type: SNS
-          Address: !Ref BudgetAlertSnsTopicArn
+          Address: !Ref AlertSnsTopicArn
       ThresholdExpression: |
         {
-          "And": [{
-            "Dimensions": {
-              "Key": "ANOMALY_TOTAL_IMPACT_ABSOLUTE",
-              "Values": [ "5" ],
-              "MatchOptions": [ "GREATER_THAN_OR_EQUAL" ]
-            }
-          }]
+            "Key": "ANOMALY_TOTAL_IMPACT_PERCENTAGE",
+            "MatchOptions": [ "GREATER_THAN_OR_EQUAL" ],
+            "Values": [ "10" ]
+          }
         }
 
 Outputs:
@@ -113,14 +95,14 @@ Outputs:
     Export:
       Name: !Sub "${AWS::StackName}-MonthlyCostBudget-Id"
 
-  ServerlessCostAnomalyMonitorId:
+  CostAnomalyDefaultServicesMonitorId:
     Description: Serverless Cost Anomaly Monitor ID
-    Value: !Ref ServerlessCostAnomalyMonitor
+    Value: !Ref CostAnomalyDefaultServicesMonitor
     Export:
-      Name: !Sub "${AWS::StackName}-ServerlessCostAnomalyMonitor-Id"
+      Name: !Sub "${AWS::StackName}-CostAnomalyDefaultServicesMonitor-Id"
 
-  CostAnomalySubscriptionId:
+  CostAnomalyDefaultServicesSubscriptionId:
     Description: Cost Anomaly Subscription ID
-    Value: !Ref CostAnomalySubscription
+    Value: !Ref CostAnomalyDefaultServicesSubscription
     Export:
-      Name: !Sub "${AWS::StackName}-CostAnomalySubscription-Id"
+      Name: !Sub "${AWS::StackName}-CostAnomalyDefaultServicesSubscription-Id"
