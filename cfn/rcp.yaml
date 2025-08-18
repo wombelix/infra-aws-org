@@ -58,6 +58,20 @@ Resources:
             Condition:
               'Null':
                 's3:x-amz-server-side-encryption': 'true'
+          - Sid: DenyS3PublicAccess
+            Effect: Deny
+            Principal: '*'
+            Action:
+              - 's3:PutBucketAcl'
+              - 's3:PutBucketPolicy'
+              - 's3:PutObjectAcl'
+            Resource: '*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl':
+                  - 'public-read'
+                  - 'public-read-write'
+                  - 'authenticated-read'
       TargetIds:
         - !Ref OrganizationRootId
 
