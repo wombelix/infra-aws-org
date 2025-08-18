@@ -6,6 +6,9 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: "Resource Control Policies for AWS Organizations - encryption, secure transport, org-only access, OIDC restrictions"
 
 Parameters:
+  OrganizationId:
+    Type: String
+    Description: "AWS Organizations ID (e.g., o-xxxxxxxxxx)"
   OrganizationRootId:
     Type: String
     Description: "AWS Organizations root ID (e.g., r-xxxx)"
@@ -79,7 +82,7 @@ Resources:
             Resource: '*'
             Condition:
               StringNotEquals:
-                'aws:PrincipalOrgID': !Ref OrganizationRootId
+                'aws:PrincipalOrgID': !Ref OrganizationId
               Bool:
                 'aws:PrincipalIsAWSService': 'false'
       TargetIds:
