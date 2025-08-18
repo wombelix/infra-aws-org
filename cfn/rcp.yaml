@@ -78,7 +78,8 @@ Resources:
           - Sid: EnforceOrgIdentities
             Effect: Deny
             Principal: '*'
-            Action: '*'
+            Action:
+              - 's3:*'
             Resource: '*'
             Condition:
               StringNotEqualsIfExists:
