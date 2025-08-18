@@ -49,6 +49,15 @@ Resources:
               NumericLessThan:
                 's3:TlsVersion':
                   - '1.2'
+          - Sid: EnforceEncryption
+            Effect: Deny
+            Principal: '*'
+            Action:
+              - 's3:PutObject'
+            Resource: '*'
+            Condition:
+              'Null':
+                's3:x-amz-server-side-encryption': 'true'
       TargetIds:
         - !Ref OrganizationRootId
 
