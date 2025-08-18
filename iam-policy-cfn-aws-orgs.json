@@ -80,7 +80,8 @@
         "cloudformation:ListChangeSets",
         "cloudformation:ListStacks",
         "cloudformation:UpdateStack",
-        "cloudformation:ValidateTemplate"
+        "cloudformation:ValidateTemplate",
+        "cloudformation:GetTemplateSummary"
       ],
       "Resource": "*"
     }
