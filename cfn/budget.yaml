@@ -23,8 +23,6 @@ Resources:
           Unit: USD
         TimeUnit: MONTHLY
         BudgetType: COST
-        TimePeriod:
-          Start: "2025-07-01"
       NotificationsWithSubscribers:
         - Notification:
             NotificationType: FORECASTED
