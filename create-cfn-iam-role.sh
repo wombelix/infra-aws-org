@@ -20,6 +20,24 @@ error_exit() {
     exit 1
 }
 
+# Function to compare JSON documents
+# Returns 0 if JSON documents are equivalent, 1 otherwise
+compare_json() {
+    local json1="$1"
+    local json2="$2"
+
+    # Normalize JSON using jq for comparison (removes whitespace differences)
+    if command -v jq &> /dev/null; then
+        local normalized1 normalized2
+        normalized1=$(echo "$json1" | jq -S . 2>/dev/null) || return 1
+        normalized2=$(echo "$json2" | jq -S . 2>/dev/null) || return 1
+        [ "$normalized1" = "$normalized2" ]
+    else
+        # Fallback comparison without jq (less reliable)
+        [ "$json1" = "$json2" ]
+    fi
+}
+
 main() {
     log "AWS Organizations Management Setup"
     log "=================================="
@@ -39,36 +57,80 @@ main() {
     fi
     log "Operating in AWS Account ID: $ACCOUNT_ID"
 
+    # Define the expected assume role policy document
+    ASSUME_ROLE_POLICY='{
+        "Version": "2012-10-17",
+        "Statement": [{
+            "Effect": "Allow",
+            "Principal": {"Service": "cloudformation.amazonaws.com"},
+            "Action": "sts:AssumeRole"
+        }]
+    }'
+
     # Check if role exists
     log "Checking if IAM role '$ROLE_NAME' exists..."
-    if ROLE_ARN=$(aws iam get-role --role-name "$ROLE_NAME" --query 'Role.Arn' --output text --no-cli-pager 2>/dev/null); then
-        log "Role '$ROLE_NAME' already exists: $ROLE_ARN"
+    if aws iam get-role --role-name "$ROLE_NAME" --no-cli-pager &> /dev/null; then
+        log "Role '$ROLE_NAME' already exists. Checking if updates are needed..."
+
+        # Get current assume role policy document
+        CURRENT_ASSUME_ROLE_POLICY=$(aws iam get-role --role-name "$ROLE_NAME" --query 'Role.AssumeRolePolicyDocument' --output json --no-cli-pager)
+
+        # Compare assume role policies
+        if compare_json "$ASSUME_ROLE_POLICY" "$CURRENT_ASSUME_ROLE_POLICY"; then
+            log "Assume role policy is up-to-date."
+        else
+            log "Updating assume role policy..."
+            aws iam update-assume-role-policy \
+                --role-name "$ROLE_NAME" \
+                --policy-document "$ASSUME_ROLE_POLICY" \
+                --no-cli-pager
+            log "Assume role policy updated successfully."
+        fi
     else
         log "Role '$ROLE_NAME' not found. Creating it..."
-        ROLE_ARN=$(aws iam create-role \
+        aws iam create-role \
             --role-name "$ROLE_NAME" \
-            --assume-role-policy-document '{
-                "Version": "2012-10-17",
-                "Statement": [{
-                    "Effect": "Allow",
-                    "Principal": {"Service": "cloudformation.amazonaws.com"},
-                    "Action": "sts:AssumeRole"
-                }]
-            }' \
-            --query 'Role.Arn' --output text --no-cli-pager)
+            --assume-role-policy-document "$ASSUME_ROLE_POLICY" \
+            --no-cli-pager > /dev/null
 
-        log "Role created with ARN: $ROLE_ARN"
+        log "Role created successfully."
     fi
 
-    # Attach or update the inline policy to ensure it's always in sync with the file.
-    # This makes the script idempotent.
-    log "Attaching/updating policy '$POLICY_NAME' to role '$ROLE_NAME'..."
-    aws iam put-role-policy \
-        --role-name "$ROLE_NAME" \
-        --policy-name "$POLICY_NAME" \
-        --policy-document "file://$POLICY_FILE" \
-        --no-cli-pager
-    log "Policy attached/updated successfully."
+    # Get the current role ARN
+    ROLE_ARN=$(aws iam get-role --role-name "$ROLE_NAME" --query 'Role.Arn' --output text --no-cli-pager)
+
+    # Check if the inline policy exists and compare it with our local version
+    log "Checking if policy '$POLICY_NAME' exists and is up-to-date..."
+
+    if aws iam get-role-policy --role-name "$ROLE_NAME" --policy-name "$POLICY_NAME" --no-cli-pager &> /dev/null; then
+        # Policy exists, get current policy document
+        CURRENT_POLICY=$(aws iam get-role-policy --role-name "$ROLE_NAME" --policy-name "$POLICY_NAME" --query 'PolicyDocument' --output json --no-cli-pager)
+
+        # Read local policy file
+        LOCAL_POLICY=$(cat "$POLICY_FILE")
+
+        # Compare policies
+        if compare_json "$LOCAL_POLICY" "$CURRENT_POLICY"; then
+            log "Policy '$POLICY_NAME' is up-to-date."
+        else
+            log "Policy '$POLICY_NAME' has changed. Updating..."
+            aws iam put-role-policy \
+                --role-name "$ROLE_NAME" \
+                --policy-name "$POLICY_NAME" \
+                --policy-document "file://$POLICY_FILE" \
+                --no-cli-pager
+            log "Policy updated successfully."
+        fi
+    else
+        # Policy doesn't exist, create it
+        log "Policy '$POLICY_NAME' not found. Creating it..."
+        aws iam put-role-policy \
+            --role-name "$ROLE_NAME" \
+            --policy-name "$POLICY_NAME" \
+            --policy-document "file://$POLICY_FILE" \
+            --no-cli-pager
+        log "Policy created successfully."
+    fi
 
     echo ""
     log "Setup completed successfully."
