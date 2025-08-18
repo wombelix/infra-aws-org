@@ -9,9 +9,6 @@ Parameters:
   OrganizationRootId:
     Type: String
     Description: "AWS Organizations root ID (e.g., r-xxxx)"
-  GitHubRepo:
-    Type: String
-    Description: "GitHub repository allowed for OIDC (format: org/repo or org/* for all repos)"
 
 Resources:
   # Comprehensive resource control policies for security and compliance
@@ -42,58 +39,7 @@ Resources:
             Condition:
               BoolIfExists:
                 'aws:SecureTransport': 'false'
-          - Sid: EnforceS3TlsVersion
-            Effect: Deny
-            Principal: '*'
-            Action:
-              - 's3:*'
-            Resource: '*'
-            Condition:
-              NumericLessThan:
-                's3:TlsVersion':
-                  - '1.2'
-          - Sid: EnforceEncryption
-            Effect: Deny
-            Principal: '*'
-            Action:
-              - 's3:PutObject'
-            Resource: '*'
-            Condition:
-              'Null':
-                's3:x-amz-server-side-encryption': 'true'
-          - Sid: DenyS3PublicAccess
-            Effect: Deny
-            Principal: '*'
-            Action:
-              - 's3:PutBucketAcl'
-              - 's3:PutBucketPolicy'
-              - 's3:PutObjectAcl'
-            Resource: '*'
-            Condition:
-              StringEquals:
-                's3:x-amz-acl':
-                  - 'public-read'
-                  - 'public-read-write'
-                  - 'authenticated-read'
-          - Sid: DenyExternalAccess
-            Effect: Deny
-            Principal: '*'
-            Action: '*'
-            Resource: '*'
-            Condition:
-              StringNotEquals:
-                'aws:PrincipalOrgID': !Ref OrganizationRootId
-              Bool:
-                'aws:PrincipalIsAWSService': 'false'
-          - Sid: RestrictOIDCToApprovedProviders
-            Effect: Deny
-            Principal: '*'
-            Action:
-              - 'sts:AssumeRoleWithWebIdentity'
-            Resource: '*'
-            Condition:
-             StringNotLike:
-               'token.actions.githubusercontent.com:sub': !Sub 'repo:${GitHubRepo}:*'
+
       TargetIds:
         - !Ref OrganizationRootId
 

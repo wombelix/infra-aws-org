@@ -5,7 +5,6 @@
 template-file-path: cfn/rcp.yaml
 parameters:
   OrganizationRootId: r-lp71
-  GitHubRepo: wombelix/*
 tags:
   Purpose: AWSOrg
   Lifecycle: Active
