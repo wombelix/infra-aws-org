@@ -33,9 +33,27 @@ Resources:
         Statement:
           - Effect: Deny
             NotAction:
-              - 's3:GetBucketPolicy'
-              - 's3:PutBucketPolicy'
+              - 'iam:GetAccountSummary'
+              - 'iam:DeleteAccessKey'
+              - 'iam:DeleteSigningCertificate'
+              - 'iam:DeleteLoginProfile'
+              - 'iam:DeactivateMFADevice'
+              - 'iam:ListAccessKeys'
+              - 'iam:ListSigningCertificates'
+              - 'iam:GetLoginProfile'
+              - 'iam:ListMFADevices'
+              - 'iam:GetUser'
+              - 'iam:GetAccessKeyLastUsed'
+              - 'iam:CreateLoginProfile'
+              - 'iam:GetLoginProfile'
               - 's3:DeleteBucketPolicy'
+              - 's3:PutBucketPolicy'
+              - 's3:GetBucketPolicy'
+              - 's3:ListAllMyBuckets'
+              - 'sqs:SetQueueAttributes'
+              - 'sqs:GetQueueAttributes'
+              - 'sqs:ListQueues'
+              - 'sqs:GetQueueUrl'
             Resource: '*'
             Condition:
               StringLike:
@@ -260,3 +278,15 @@ Outputs:
     Value: !Ref ProtectCloudTrail
     Export:
       Name: !Sub "${AWS::StackName}-ProtectCloudTrail-PolicyId"
+
+  RequireS3BlockPublicAccessPolicyId:
+    Description: S3 Block Public Access Enforcement SCP Policy ID
+    Value: !Ref RequireS3BlockPublicAccess
+    Export:
+      Name: !Sub "${AWS::StackName}-RequireS3BlockPublicAccess-PolicyId"
+
+  EnforceMFAForSensitiveActionsPolicyId:
+    Description: MFA Enforcement SCP Policy ID
+    Value: !Ref EnforceMFAForSensitiveActions
+    Export:
+      Name: !Sub "${AWS::StackName}-EnforceMFAForSensitiveActions-PolicyId"
