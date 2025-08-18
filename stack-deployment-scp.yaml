@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: MIT-0
 
-template-file-path: cfn/scp-security.yaml
+template-file-path: cfn/scp.yaml
 parameters:
   OrganizationRootId: r-lp71
 tags:

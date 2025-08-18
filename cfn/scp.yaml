@@ -1,0 +1,181 @@
+# SPDX-FileCopyrightText: 2025 Dominik Wombacher <dominik@wombacher.cc>
+#
+# SPDX-License-Identifier: MIT-0
+
+AWSTemplateFormatVersion: '2010-09-09'
+Description: "Service Control Policies for AWS Organizations - Global governance controls"
+
+Parameters:
+  OrganizationRootId:
+    Type: String
+    Description: "AWS Organizations root ID (e.g., r-xxxx)"
+
+Resources:
+  # =============================================================================
+  # GLOBAL GOVERNANCE POLICY
+  # Combined policies that establish organizational governance and security controls
+  # =============================================================================
+
+  ServiceControlPolicies:
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Type: AWS::Organizations::Policy
+    Properties:
+      Type: SERVICE_CONTROL_POLICY
+      Name: ServiceControlPolicies
+      Description: |
+        Global Service Control Policy combining all governance and security controls.
+        This policy merges the foundational and security SCPs into a single policy.
+      Content:
+        Version: 2012-10-17
+        Statement:
+          # From DenyAllResourcesOutsideEU
+          - Sid: DenyAllOutsideEU
+            Effect: Deny
+            NotAction:
+              - 'a4b:*'
+              - 'aws-marketplace-management:*'
+              - 'aws-marketplace:*'
+              - 'aws-portal:*'
+              - 'budgets:*'
+              - 'ce:*'
+              - 'chime:*'
+              - 'cloudfront:*'
+              - 'config:*'
+              - 'cur:*'
+              - 'directconnect:*'
+              - 'ec2:DescribeRegions'
+              - 'ec2:DescribeTransitGateways'
+              - 'ec2:DescribeVpnGateways'
+              - 'fms:*'
+              - 'globalaccelerator:*'
+              - 'health:*'
+              - 'iam:*'
+              - 'importexport:*'
+              - 'mobileanalytics:*'
+              - 'networkmanager:*'
+              - 'organizations:*'
+              - 'pricing:*'
+              - 'route53:*'
+              - 'route53domains:*'
+              - 'route53-recovery-cluster:*'
+              - 'route53-recovery-control-config:*'
+              - 'route53-recovery-readiness:*'
+              - 's3:GetAccountPublic*'
+              - 's3:ListAllMyBuckets'
+              - 's3:ListMultiRegionAccessPoints'
+              - 's3:PutAccountPublic*'
+              - 'shield:*'
+              - 'support:*'
+              - 'trustedadvisor:*'
+              - 'waf-regional:*'
+              - 'waf:*'
+              - 'wafv2:*'
+              - 'wellarchitected:*'
+            Resource: '*'
+            Condition:
+              StringNotEquals:
+                'aws:RequestedRegion':
+                  - eu-central-1
+                  - eu-west-1
+
+          # From ProtectDefaultLogGroupsAndBuckets (optimized)
+          - Sid: DenyDeleteDefaultCloudWatchLogGroups
+            Effect: Deny
+            Action:
+              - logs:DeleteLogGroup
+            Resource:
+              - arn:aws:logs:*:*:log-group:/aws/*
+
+          # From RootUserDenyAllExceptActionsThatRequireRootAccess
+          - Sid: RootUserDenyAllExceptActionsThatRequireRootAccess
+            Effect: Deny
+            NotAction:
+              - 'iam:GetAccountSummary'
+              - 'iam:DeleteAccessKey'
+              - 'iam:DeleteSigningCertificate'
+              - 'iam:DeleteLoginProfile'
+              - 'iam:DeactivateMFADevice'
+              - 'iam:ListAccessKeys'
+              - 'iam:ListSigningCertificates'
+              - 'iam:GetLoginProfile'
+              - 'iam:ListMFADevices'
+              - 'iam:GetUser'
+              - 'iam:GetAccessKeyLastUsed'
+              - 'iam:CreateLoginProfile'
+              - 's3:DeleteBucketPolicy'
+              - 's3:PutBucketPolicy'
+              - 's3:GetBucketPolicy'
+              - 's3:ListAllMyBuckets'
+              - 'sqs:SetQueueAttributes'
+              - 'sqs:GetQueueAttributes'
+              - 'sqs:ListQueues'
+              - 'sqs:GetQueueUrl'
+            Resource: '*'
+            Condition:
+              StringLike:
+                'aws:PrincipalArn': 'arn:aws:iam::*:root'
+
+          # Consolidated statement for organization-level restrictions:
+          # - Deny leaving the organization (organizations:LeaveOrganization)
+          # - Deny creating IAM Identity Center instances (sso:CreateInstance)
+          # - Protect CloudTrail from deletion/modification (cloudtrail:* actions)
+          # - Prevent unauthorized billing access (aws-portal:*, budgets:*, ce:*, cur:*)
+          # - Prevent IAM user and access key creation (iam:CreateUser, iam:CreateAccessKey, iam:UpdateAccessKey)
+          - Sid: DenyOrganizationLevelActions
+            Effect: Deny
+            Action:
+              - 'organizations:LeaveOrganization'
+              - 'sso:CreateInstance'
+              - 'cloudtrail:DeleteTrail'
+              - 'cloudtrail:StopLogging'
+              - 'cloudtrail:UpdateTrail'
+              - 'aws-portal:*'
+              - 'budgets:*'
+              - 'ce:*'
+              - 'cur:*'
+              - 'iam:CreateUser'
+              - 'iam:CreateAccessKey'
+              - 'iam:UpdateAccessKey'
+            Resource: '*'
+
+          # From RequireS3BlockPublicAccess
+          - Sid: DenyS3PutAccountPublicAccessBlockIfNotStrict
+            Effect: Deny
+            Action: "s3:PutAccountPublicAccessBlock"
+            Resource: "*"
+            Condition:
+              StringNotEquals:
+                "s3:BlockPublicAcls": "true"
+                "s3:BlockPublicPolicy": "true"
+                "s3:IgnorePublicAcls": "true"
+                "s3:RestrictPublicBuckets": "true"
+
+          # From EnforceMFAForSensitiveActions (optimized)
+          - Sid: DenySensitiveActionsWithoutMFA
+            Effect: Deny
+            Action:
+              - "aws-portal:ModifyBilling"
+              - "aws-portal:ModifyPaymentMethods"
+              - "iam:DeleteRole"
+              - "iam:DeleteUser"
+              - "iam:UpdateAccountPasswordPolicy"
+              - "organizations:LeaveOrganization"
+              - "s3:DeleteBucket"
+              - "ec2:TerminateInstances"
+            Resource: "*"
+            Condition:
+              BoolIfExists:
+                "aws:MultiFactorAuthPresent": "false"
+              ArnNotLike:
+                "aws:PrincipalARN": "arn:aws:iam::*:role/AWSCloudFormationStackSetExecutionRole"
+
+      TargetIds:
+        - !Ref OrganizationRootId
+
+Outputs:
+  ServiceControlPoliciesPolicyId:
+    Description: Global SCP Policy ID
+    Value: !Ref ServiceControlPolicies
+    Export:
+      Name: !Sub "${AWS::StackName}-ServiceControlPolicies-PolicyId"
