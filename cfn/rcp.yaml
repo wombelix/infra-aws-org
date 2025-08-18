@@ -12,9 +12,12 @@ Parameters:
   OrganizationRootId:
     Type: String
     Description: "AWS Organizations root ID (e.g., r-xxxx)"
+  GitHubRepo:
+    Type: String
+    Description: "GitHub repository allowed for OIDC (format: org/repo or org/* for all repos)"
 
 Resources:
-  # Comprehensive resource control policies for security and compliance
+  # RCP for security and compliance
   # Why: Enforces encryption, secure transport, and organization-only access
   ResourceControlPolicies:
     DeletionPolicy: Retain
@@ -24,7 +27,7 @@ Resources:
       Type: RESOURCE_CONTROL_POLICY
       Name: ResourceControlPolicies
       Description: |
-        Comprehensive resource control policies for security and compliance (encryption, secure transport, org-only access, OIDC restrictions).
+        RCP for security and compliance (encryption, secure transport, org-only access, OIDC restrictions).
         See: https://docs.aws.amazon.com/IAM/latest/UserGuide/best-practices.html
       Content:
         Version: 2012-10-17
@@ -98,6 +101,27 @@ Resources:
                 'aws:PrincipalOrgID': !Ref OrganizationId
               BoolIfExists:
                 'aws:PrincipalIsAWSService': 'false'
+
+  RCPRestrictOIDCToApprovedProviders:
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Type: AWS::Organizations::Policy
+    Properties:
+      Type: RESOURCE_CONTROL_POLICY
+      Name: RCPRestrictOIDCToApprovedProviders
+      Description: Deny non approved OIDC providers Org wide
+      Content:
+        Version: 2012-10-17
+        Statement:
+          - Sid: GitHubRepo
+            Effect: Deny
+            Principal: '*'
+            Action:
+              - 'sts:AssumeRoleWithWebIdentity'
+            Resource: '*'
+            Condition:
+             StringNotLike:
+               'token.actions.githubusercontent.com:sub': !Sub 'repo:${GitHubRepo}:*'
       TargetIds:
         - !Ref OrganizationRootId
 
