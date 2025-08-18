@@ -39,6 +39,8 @@ Resources:
         Resources:
           # === IAM Account Password Policy ===
           IAMAccountPasswordPolicy:
+            DeletionPolicy: Retain
+            UpdateReplacePolicy: Retain
             Type: AWS::IAM::AccountPasswordPolicy
             Properties:
               MinimumPasswordLength: 32
