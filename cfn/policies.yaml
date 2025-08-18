@@ -33,6 +33,7 @@ Resources:
             tag_value:
               '@@assign':
                 - AWSOrg
+                - Shared
                 - Business
                 - Personal
                 - Experimental
