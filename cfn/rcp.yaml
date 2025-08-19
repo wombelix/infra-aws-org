@@ -101,6 +101,8 @@ Resources:
                 'aws:PrincipalOrgID': !Ref OrganizationId
               BoolIfExists:
                 'aws:PrincipalIsAWSService': 'false'
+      TargetIds:
+        - !Ref OrganizationRootId
 
   RCPRestrictOIDCToApprovedProviders:
     DeletionPolicy: Retain
