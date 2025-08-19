@@ -101,6 +101,9 @@ Resources:
                 'aws:PrincipalOrgID': !Ref OrganizationId
               BoolIfExists:
                 'aws:PrincipalIsAWSService': 'false'
+              # Allowlist AWS SSO / AWS Identity Center in management account
+              ArnNotLikeIfExists:
+                'aws:PrincipalArn': arn:aws:iam::992382651568:saml-provider/AWSSSO_*_DO_NOT_DELETE
       TargetIds:
         - !Ref OrganizationRootId
 
