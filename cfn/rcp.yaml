@@ -89,21 +89,23 @@ Resources:
             # https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_policies_rcps_syntax.html#rcp-syntax-action
             Action:
               - 's3:*'
-              - 'sts:*'
               - 'kms:*'
               - 'sqs:*'
               - 'secretsmanager:*'
               - 'ecr:*'
               - 'aoss:*'
+              # Deny sts except for SAML/OIDC
+              - 'sts:AssumeRole'
+              - 'sts:GetCallerIdentity'
+              - 'sts:GetSessionToken'
+              - 'sts:GetFederationToken'
+              - 'sts:DecodeAuthorizationMessage'
             Resource: '*'
             Condition:
               StringNotEqualsIfExists:
                 'aws:PrincipalOrgID': !Ref OrganizationId
               BoolIfExists:
                 'aws:PrincipalIsAWSService': 'false'
-              # Allowlist AWS SSO / AWS Identity Center in management account
-              ArnNotLikeIfExists:
-                'aws:PrincipalArn': arn:aws:iam::992382651568:saml-provider/AWSSSO_*_DO_NOT_DELETE
       TargetIds:
         - !Ref OrganizationRootId
 
