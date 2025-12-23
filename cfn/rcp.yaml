@@ -62,12 +62,11 @@ Resources:
             Principal: '*'
             Action:
               - 's3:PutObject'
-            Resource: '*'
+            NotResource:
+              - 'arn:aws:s3:::cf-templates-*/*'
             Condition:
               'Null':
                 's3:x-amz-server-side-encryption': 'true'
-              ArnNotLike:
-                's3:ResourceArn': 'arn:aws:s3:::cf-templates-*/*'
           - Sid: DenyS3PublicAccess
             Effect: Deny
             Principal: '*'
