@@ -170,6 +170,23 @@ Resources:
               ArnNotLike:
                 "aws:PrincipalARN": "arn:aws:iam::*:role/AWSCloudFormationStackSetExecutionRole"
 
+          # Prevent irreversible data lock-in actions
+          # These can lock data making it impossible to delete or modify
+          # See: https://github.com/iann0036/iam-actions-cost
+          - Sid: DenyDataLockIn
+            Effect: Deny
+            Action:
+              - 's3:PutObjectRetention'
+              - 's3:PutObjectLegalHold'
+              - 's3:BypassGovernanceRetention'
+              - 's3:PutBucketObjectLockConfiguration'
+              - 's3-object-lambda:PutObjectLegalHold'
+              - 's3-object-lambda:PutObjectRetention'
+              - 'glacier:InitiateVaultLock'
+              - 'glacier:CompleteVaultLock'
+              - 'backup:PutBackupVaultLockConfiguration'
+            Resource: '*'
+
       TargetIds:
         - !Ref OrganizationRootId
 

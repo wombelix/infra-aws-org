@@ -260,6 +260,28 @@ Resources:
               - 'securityhub:*'
             Resource: '*'
 
+          # === EXPENSIVE COMMITMENTS ===
+          # Block actions that create long-term commitments or high fixed costs
+          # See: https://github.com/iann0036/iam-actions-cost
+          - Sid: DenyExpensiveCommitments
+            Effect: Deny
+            Action:
+              - 'shield:CreateSubscription'
+              - 'acm-pca:CreateCertificateAuthority'
+              - 'savingsplans:CreateSavingsPlan'
+              - 'ec2:ModifyReservedInstances'
+              - 'ec2:PurchaseHostReservation'
+              - 'ec2:PurchaseReservedInstancesOffering'
+              - 'ec2:PurchaseScheduledInstances'
+              - 'aws-marketplace:Subscribe'
+              - 'aws-marketplace:AcceptAgreementApprovalRequest'
+              - 'outposts:CreateOutpost'
+              - 'snowball:CreateCluster'
+              - 'route53domains:RegisterDomain'
+              - 'route53domains:RenewDomain'
+              - 'route53domains:TransferDomain'
+            Resource: '*'
+
       TargetIds:
         - !Ref OrganizationRootId
 
