@@ -10,11 +10,13 @@ Description: "Service Control Policies for AWS Organizations - Cost optimization
 # =============================================================================
 #
 # MIGRATED (now in scp-cost.yaml):
-# - DenySecurityHubActions  -> DenySecurityHub
+# - DenySecurityHubActions                        -> DenySecurityHub
+# - DenyHighCostCloudWatchFeatures/DenyDetailedMonitoring -> DenyDetailedMonitoring
+# - DenyHighCostCloudWatchFeatures/DenyContainerInsightsEnhanced -> DenyContainerInsightsEnhanced
 #
-# NOT MIGRATED (kept below for reference - considered too risky):
-# - DenyHighCostEventBridgeFeatures  (archive/replay may be useful, low cost)
-# - DenyHighCostCloudWatchFeatures   (BREAKS cloudwatch:PutMetricData - kills all custom metrics!)
+# NOT MIGRATED (kept below for reference - risky or low value):
+# - DenyHighCostEventBridgeFeatures  (archive/replay useful for debugging, low cost)
+# - DenyHighResolutionMetrics        (DANGEROUS - breaks all custom metrics!)
 #
 # =============================================================================
 
@@ -25,7 +27,7 @@ Parameters:
 
 Resources:
   # =============================================================================
-  # REMAINING POLICIES - NOT MIGRATED (risky or breaks things)
+  # REMAINING POLICIES - NOT MIGRATED (risky or low value)
   # =============================================================================
 
   # Blocks EventBridge features with storage costs
@@ -64,43 +66,23 @@ Resources:
       TargetIds:
         - !Ref OrganizationRootId
 
-  # Restricts high-cost CloudWatch features
-  # DANGER: DenyHighResolutionMetrics blocks cloudwatch:PutMetricData entirely!
+  # DANGER: This policy contains DenyHighResolutionMetrics which blocks ALL PutMetricData!
   # This BREAKS: Lambda custom metrics, application metrics, SDK metrics, everything.
-  # DO NOT DEPLOY without removing DenyHighResolutionMetrics statement.
-  DenyHighCostCloudWatchFeatures:
+  # DO NOT DEPLOY this policy. Kept only as a warning/reference.
+  DenyHighResolutionMetrics:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Type: AWS::Organizations::Policy
     Properties:
       Type: SERVICE_CONTROL_POLICY
-      Name: DenyHighCostCloudWatchFeatures
+      Name: DenyHighResolutionMetrics
       Description: |
-        DANGER: Contains DenyHighResolutionMetrics which blocks ALL PutMetricData.
+        DANGER: DO NOT DEPLOY! This blocks ALL cloudwatch:PutMetricData.
         This will break Lambda metrics, custom metrics, and most monitoring.
-        DO NOT DEPLOY without careful review and modification.
+        Kept only as a reference for what NOT to do.
       Content:
         Version: 2012-10-17
         Statement:
-          - Sid: DenyDetailedMonitoring
-            Effect: Deny
-            Action:
-              - 'ec2:MonitorInstances'
-              - 'rds:ModifyDBInstance'
-              - 'elasticloadbalancing:ModifyLoadBalancerAttributes'
-            Resource: '*'
-            Condition:
-              StringEquals:
-                'ec2:DetailedMonitoring': 'true'
-          - Sid: DenyContainerInsightsEnhanced
-            Effect: Deny
-            Action:
-              - 'ecs:PutAccountSetting'
-              - 'eks:UpdateClusterConfig'
-            Resource: '*'
-            Condition:
-              StringLike:
-                'ecs:container-insights': 'enhanced'
           # DANGER: This blocks ALL custom metrics!
           - Sid: DenyHighResolutionMetrics
             Effect: Deny
@@ -116,8 +98,8 @@ Outputs:
     Value: !Ref DenyHighCostEventBridgeFeatures
     Export:
       Name: !Sub "${AWS::StackName}-DenyHighCostEventBridgeFeatures-PolicyId"
-  DenyHighCostCloudWatchFeaturesPolicyId:
-    Description: CloudWatch High-Cost Features Deny SCP Policy ID
-    Value: !Ref DenyHighCostCloudWatchFeatures
+  DenyHighResolutionMetricsPolicyId:
+    Description: High Resolution Metrics Deny SCP Policy ID (DANGEROUS - DO NOT DEPLOY)
+    Value: !Ref DenyHighResolutionMetrics
     Export:
-      Name: !Sub "${AWS::StackName}-DenyHighCostCloudWatchFeatures-PolicyId"
+      Name: !Sub "${AWS::StackName}-DenyHighResolutionMetrics-PolicyId"

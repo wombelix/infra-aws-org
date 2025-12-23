@@ -11,16 +11,22 @@ Description: "Service Control Policies for AWS Organizations - Cost optimization
 #
 # MIGRATED (now in scp-cost.yaml):
 # - DenyHighCostLambdaFeatures/DenyProvisionedConcurrency -> DenyLambdaProvisionedConcurrency
+# - DenyHighCostLambdaFeatures/DenyProvisionedModeESM     -> DenyLambdaProvisionedESM
+# - DenyHighCostDynamoDBFeatures/DenyReservedCapacity     -> DenyDynamoDBReservedCapacity
+# - DenyHighCostDynamoDBFeatures/DenyGlobalTables         -> DenyDynamoDBGlobalTables
+# - DenyHighCostAPIGatewayFeatures/DenyAPIGatewayVPCEndpoints -> DenyAPIGatewayVPCEndpoints
+# - DenyHighCostBedrockFeatures (core parts)              -> DenyBedrockProvisionedThroughput,
+#                                                            DenyBedrockCustomModels,
+#                                                            DenyBedrockMarketplace
 # - DenyExpensiveAnalyticsAndMessaging/DenyAmazonMQ       -> DenyStreamingAndMessaging
 #
-# NOT MIGRATED (kept below for reference - considered too risky or unreliable):
-# - DenyHighCostLambdaFeatures/DenyProvisionedModeESM  (condition may not work reliably)
-# - DenyHighCostLambdaFeatures/DenyLambdaEdge          (flawed condition logic)
-# - DenyHighCostDynamoDBFeatures                       (BillingMode condition unreliable in SCPs)
-# - DenyHighCostAPIGatewayFeatures                     (REST APIs may be needed for Cognito, WAF)
-# - DenyHighCostStepFunctionsFeatures                  (Standard workflows needed for >5min)
-# - DenyHighCostBedrockFeatures                        (Bedrock evolving rapidly, revisit later)
-# - DenyExpensiveAnalyticsAndMessaging (partial)       (Glue/Athena parts are edge cases)
+# NOT MIGRATED (kept below for reference - too risky, unreliable, or limiting):
+# - DenyHighCostLambdaFeatures/DenyLambdaEdge    (flawed condition logic)
+# - DenyHighCostDynamoDBFeatures/DenyProvisionedCapacity (BillingMode condition unreliable)
+# - DenyHighCostAPIGatewayFeatures/DenyRESTAPIs  (REST APIs needed for Cognito, WAF)
+# - DenyHighCostStepFunctionsFeatures            (Standard workflows needed for >5min)
+# - DenyHighCostBedrockFeatures (complex conditions) (conditions may not work reliably)
+# - DenyExpensiveAnalyticsFeatures               (Glue/Athena edge cases)
 #
 # =============================================================================
 
@@ -34,33 +40,22 @@ Resources:
   # REMAINING POLICIES - NOT MIGRATED (risky, unreliable, or too limiting)
   # =============================================================================
 
-  # Lambda edge cases - provisioned ESM pollers and Lambda@Edge
-  # WARNING: Conditions may not work reliably. Lambda@Edge condition is flawed.
-  DenyHighCostLambdaFeatures:
+  # Lambda@Edge blocking
+  # WARNING: This condition is FLAWED - it requires BOTH conditions to be true
+  # but they use AND logic, which may not work as expected.
+  DenyLambdaEdge:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Type: AWS::Organizations::Policy
     Properties:
       Type: SERVICE_CONTROL_POLICY
-      Name: DenyHighCostLambdaFeatures
+      Name: DenyLambdaEdge
       Description: |
-        Block Lambda features with fixed costs. WARNING: Conditions may be unreliable.
-        DenyLambdaEdge condition is flawed - would block all us-east-1 functions.
+        Block Lambda@Edge functions. WARNING: Condition logic is flawed.
+        May block all us-east-1 functions. Test thoroughly before deploying.
       Content:
         Version: 2012-10-17
         Statement:
-          - Sid: DenyProvisionedModeESM
-            Effect: Deny
-            Action:
-              - 'lambda:CreateEventSourceMapping'
-              - 'lambda:UpdateEventSourceMapping'
-            Resource: '*'
-            Condition:
-              'Null':
-                'lambda:ProvisionedPollerConfig': 'false'
-          # WARNING: This condition is FLAWED - it requires BOTH conditions to be true
-          # but they use AND logic, so it would block us-east-1 functions even without
-          # edgelambda principal if both conditions aren't checked properly
           - Sid: DenyLambdaEdge
             Effect: Deny
             Action:
@@ -78,14 +73,13 @@ Resources:
 
   # DynamoDB billing mode enforcement
   # WARNING: dynamodb:BillingMode condition doesn't work reliably in SCPs.
-  # AWS doesn't always pass this context key. Test thoroughly before deploying.
-  DenyHighCostDynamoDBFeatures:
+  DenyDynamoDBProvisionedCapacity:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Type: AWS::Organizations::Policy
     Properties:
       Type: SERVICE_CONTROL_POLICY
-      Name: DenyHighCostDynamoDBFeatures
+      Name: DenyDynamoDBProvisionedCapacity
       Description: |
         Force DynamoDB on-demand capacity. WARNING: BillingMode condition unreliable.
         May not work as expected. Test in sandbox before deploying.
@@ -96,39 +90,24 @@ Resources:
             Effect: Deny
             Action:
               - 'dynamodb:CreateTable'
-              - 'dynamodb:ModifyTable'
               - 'dynamodb:UpdateTable'
             Resource: '*'
             Condition:
               StringNotEquals:
                 'dynamodb:BillingMode': 'PAY_PER_REQUEST'
-          - Sid: DenyReservedCapacity
-            Effect: Deny
-            Action:
-              - 'dynamodb:PurchaseReservedCapacityOfferings'
-              - 'dynamodb:DescribeReservedCapacity'
-              - 'dynamodb:DescribeReservedCapacityOfferings'
-            Resource: '*'
-          - Sid: DenyGlobalTables
-            Effect: Deny
-            Action:
-              - 'dynamodb:CreateGlobalTable'
-              - 'dynamodb:UpdateGlobalTable'
-              - 'dynamodb:CreateReplicationGroup'
-            Resource: '*'
       TargetIds:
         - !Ref OrganizationRootId
 
   # API Gateway REST API restrictions
   # WARNING: REST APIs may be needed for Cognito authorizers, WAF integration,
   # request validation, API keys, usage plans, and other features not in HTTP APIs.
-  DenyHighCostAPIGatewayFeatures:
+  DenyRESTAPIs:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Type: AWS::Organizations::Policy
     Properties:
       Type: SERVICE_CONTROL_POLICY
-      Name: DenyHighCostAPIGatewayFeatures
+      Name: DenyRESTAPIs
       Description: |
         Force HTTP APIs by blocking REST APIs. WARNING: REST APIs needed for
         Cognito authorizers, WAF, request validation, API keys. Review carefully.
@@ -143,36 +122,19 @@ Resources:
               - 'apigateway:CloneRestApi'
               - 'apigateway:PutRestApi'
             Resource: '*'
-          - Sid: DenyPrivateAPIs
-            Effect: Deny
-            Action:
-              - 'apigateway:CreateRestApi'
-              - 'apigateway:ImportRestApi'
-            Resource: '*'
-            Condition:
-              StringEquals:
-                'apigateway:Request/EndpointType': 'PRIVATE'
-          - Sid: DenyAPIGatewayVPCEndpoints
-            Effect: Deny
-            Action:
-              - 'ec2:CreateVpcEndpoint'
-            Resource: '*'
-            Condition:
-              StringEquals:
-                'ec2:VpceServiceName': 'com.amazonaws.*.execute-api'
       TargetIds:
         - !Ref OrganizationRootId
 
   # Step Functions Express-only enforcement
   # WARNING: Standard workflows are required for executions >5 minutes.
   # Express workflows have 5-minute max duration limit.
-  DenyHighCostStepFunctionsFeatures:
+  DenyStandardWorkflows:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Type: AWS::Organizations::Policy
     Properties:
       Type: SERVICE_CONTROL_POLICY
-      Name: DenyHighCostStepFunctionsFeatures
+      Name: DenyStandardWorkflows
       Description: |
         Force Express Workflows. WARNING: Standard workflows required for >5 min executions.
         Don't deploy if you have long-running workflows.
@@ -188,73 +150,24 @@ Resources:
             Condition:
               StringNotEquals:
                 'states:StateMachineType': 'EXPRESS'
-          - Sid: DenyBatchIntegrations
-            Effect: Deny
-            Action:
-              - 'states:CreateStateMachine'
-              - 'states:UpdateStateMachine'
-            Resource: '*'
-            Condition:
-              StringLike:
-                'states:Definition': '*arn:aws:states:::batch:*'
-          - Sid: DenyEMRIntegrations
-            Effect: Deny
-            Action:
-              - 'states:CreateStateMachine'
-              - 'states:UpdateStateMachine'
-            Resource: '*'
-            Condition:
-              StringLike:
-                'states:Definition': '*arn:aws:states:::emr:*'
       TargetIds:
         - !Ref OrganizationRootId
 
-  # Bedrock cost controls
-  # WARNING: Bedrock is evolving rapidly. These actions/conditions may change.
-  # Revisit this policy periodically as AWS updates Bedrock.
-  DenyHighCostBedrockFeatures:
+  # Bedrock complex conditions (human eval, data automation)
+  # WARNING: These conditions may not work reliably or may become outdated.
+  DenyBedrockComplexFeatures:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Type: AWS::Organizations::Policy
     Properties:
       Type: SERVICE_CONTROL_POLICY
-      Name: DenyHighCostBedrockFeatures
+      Name: DenyBedrockComplexFeatures
       Description: |
-        Block expensive Bedrock features. WARNING: Bedrock API evolving rapidly.
-        Conditions may become outdated. Revisit periodically.
+        Block Bedrock features with complex conditions. WARNING: Conditions may be unreliable.
+        Core Bedrock cost controls are in scp-cost.yaml.
       Content:
         Version: 2012-10-17
         Statement:
-          - Sid: DenyProvisionedThroughput
-            Effect: Deny
-            Action:
-              - 'bedrock:CreateProvisionedModelThroughput'
-              - 'bedrock:UpdateProvisionedModelThroughput'
-              - 'bedrock:PutProvisionedModelThroughput'
-            Resource: '*'
-          - Sid: DenyCustomModelImport
-            Effect: Deny
-            Action:
-              - 'bedrock:CreateModelImportJob'
-              - 'bedrock:ImportCustomModel'
-            Resource: '*'
-          - Sid: DenyModelCustomization
-            Effect: Deny
-            Action:
-              - 'bedrock:CreateModelCustomizationJob'
-              - 'bedrock:CreateFineTuningJob'
-              - 'bedrock:CreateContinuedPreTrainingJob'
-            Resource: '*'
-          - Sid: DenyMarketplaceModels
-            Effect: Deny
-            Action:
-              - 'bedrock:CreateMarketplaceModelEndpoint'
-              - 'bedrock:RegisterMarketplaceModelEndpoint'
-              - 'aws-marketplace:Subscribe'
-            Resource: '*'
-            Condition:
-              StringLike:
-                'aws:RequestedService': 'bedrock'
           - Sid: DenyHumanEvaluation
             Effect: Deny
             Action:
@@ -277,7 +190,6 @@ Resources:
         - !Ref OrganizationRootId
 
   # Analytics edge cases - Glue dev endpoints, Athena provisioned capacity
-  # Note: DenyAmazonMQ was migrated to scp-cost.yaml
   DenyExpensiveAnalyticsFeatures:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
@@ -304,31 +216,31 @@ Resources:
         - !Ref OrganizationRootId
 
 Outputs:
-  DenyHighCostLambdaFeaturesPolicyId:
-    Description: Lambda High-Cost Features Deny SCP Policy ID
-    Value: !Ref DenyHighCostLambdaFeatures
+  DenyLambdaEdgePolicyId:
+    Description: Lambda@Edge Deny SCP Policy ID
+    Value: !Ref DenyLambdaEdge
     Export:
-      Name: !Sub "${AWS::StackName}-DenyHighCostLambdaFeatures-PolicyId"
-  DenyHighCostDynamoDBFeaturesPolicyId:
-    Description: DynamoDB High-Cost Features Deny SCP Policy ID
-    Value: !Ref DenyHighCostDynamoDBFeatures
+      Name: !Sub "${AWS::StackName}-DenyLambdaEdge-PolicyId"
+  DenyDynamoDBProvisionedCapacityPolicyId:
+    Description: DynamoDB Provisioned Capacity Deny SCP Policy ID
+    Value: !Ref DenyDynamoDBProvisionedCapacity
     Export:
-      Name: !Sub "${AWS::StackName}-DenyHighCostDynamoDBFeatures-PolicyId"
-  DenyHighCostAPIGatewayFeaturesPolicyId:
-    Description: API Gateway High-Cost Features Deny SCP Policy ID
-    Value: !Ref DenyHighCostAPIGatewayFeatures
+      Name: !Sub "${AWS::StackName}-DenyDynamoDBProvisionedCapacity-PolicyId"
+  DenyRESTAPIsPolicyId:
+    Description: REST APIs Deny SCP Policy ID
+    Value: !Ref DenyRESTAPIs
     Export:
-      Name: !Sub "${AWS::StackName}-DenyHighCostAPIGatewayFeatures-PolicyId"
-  DenyHighCostStepFunctionsPolicyId:
-    Description: Step Functions High-Cost Features Deny SCP Policy ID
-    Value: !Ref DenyHighCostStepFunctionsFeatures
+      Name: !Sub "${AWS::StackName}-DenyRESTAPIs-PolicyId"
+  DenyStandardWorkflowsPolicyId:
+    Description: Standard Workflows Deny SCP Policy ID
+    Value: !Ref DenyStandardWorkflows
     Export:
-      Name: !Sub "${AWS::StackName}-DenyHighCostStepFunctionsFeatures-PolicyId"
-  DenyHighCostBedrockFeaturesPolicyId:
-    Description: Bedrock High-Cost Features Deny SCP Policy ID
-    Value: !Ref DenyHighCostBedrockFeatures
+      Name: !Sub "${AWS::StackName}-DenyStandardWorkflows-PolicyId"
+  DenyBedrockComplexFeaturesPolicyId:
+    Description: Bedrock Complex Features Deny SCP Policy ID
+    Value: !Ref DenyBedrockComplexFeatures
     Export:
-      Name: !Sub "${AWS::StackName}-DenyHighCostBedrockFeatures-PolicyId"
+      Name: !Sub "${AWS::StackName}-DenyBedrockComplexFeatures-PolicyId"
   DenyExpensiveAnalyticsFeaturesPolicyId:
     Description: Expensive Analytics Features Deny SCP Policy ID
     Value: !Ref DenyExpensiveAnalyticsFeatures

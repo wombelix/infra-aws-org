@@ -83,12 +83,34 @@ Resources:
             Resource: '*'
 
           # === STORAGE ===
-          # Source: scp-cost-ec2.yaml - DenyExpensiveStorageFeatures (FSx only)
+          # Source: scp-cost-ec2.yaml - DenyExpensiveStorageFeatures
           - Sid: DenyExpensiveStorage
             Effect: Deny
             Action:
               - 'fsx:*'
             Resource: '*'
+
+          # Source: scp-cost-ec2.yaml - DenyExpensiveStorageFeatures (gp3 only)
+          - Sid: DenyNonGP3Volumes
+            Effect: Deny
+            Action:
+              - 'ec2:CreateVolume'
+              - 'ec2:ModifyVolume'
+            Resource: '*'
+            Condition:
+              StringNotEquals:
+                'ec2:VolumeType': 'gp3'
+
+          # Source: scp-cost-ec2.yaml - DenyExpensiveStorageFeatures (EFS provisioned)
+          - Sid: DenyEFSProvisionedThroughput
+            Effect: Deny
+            Action:
+              - 'elasticfilesystem:CreateFileSystem'
+              - 'elasticfilesystem:UpdateFileSystem'
+            Resource: '*'
+            Condition:
+              StringEquals:
+                'elasticfilesystem:ThroughputMode': 'provisioned'
 
           # === NETWORKING ===
           # Source: scp-cost-ec2.yaml - DenyExpensiveNetworkingFeatures (NAT Gateway)
@@ -112,11 +134,91 @@ Resources:
                   - 'com.amazonaws.*.dynamodb'
 
           # === LAMBDA ===
-          # Source: scp-cost-serverless.yaml - DenyHighCostLambdaFeatures (provisioned only)
+          # Source: scp-cost-serverless.yaml - DenyHighCostLambdaFeatures
           - Sid: DenyLambdaProvisionedConcurrency
             Effect: Deny
             Action:
               - 'lambda:PutProvisionedConcurrencyConfig'
+            Resource: '*'
+
+          # Source: scp-cost-serverless.yaml - DenyHighCostLambdaFeatures (provisioned ESM)
+          - Sid: DenyLambdaProvisionedESM
+            Effect: Deny
+            Action:
+              - 'lambda:CreateEventSourceMapping'
+              - 'lambda:UpdateEventSourceMapping'
+            Resource: '*'
+            Condition:
+              'Null':
+                'lambda:ProvisionedPollerConfig': 'false'
+
+          # === DYNAMODB ===
+          # Source: scp-cost-serverless.yaml - DenyHighCostDynamoDBFeatures
+          # Note: Skipping BillingMode condition (unreliable), keeping reserved capacity + global tables
+          - Sid: DenyDynamoDBReservedCapacity
+            Effect: Deny
+            Action:
+              - 'dynamodb:PurchaseReservedCapacityOfferings'
+            Resource: '*'
+
+          - Sid: DenyDynamoDBGlobalTables
+            Effect: Deny
+            Action:
+              - 'dynamodb:CreateGlobalTable'
+              - 'dynamodb:UpdateGlobalTable'
+              - 'dynamodb:CreateTableReplica'
+            Resource: '*'
+
+          # === API GATEWAY ===
+          # Source: scp-cost-serverless.yaml - DenyHighCostAPIGatewayFeatures (VPC endpoints only)
+          - Sid: DenyAPIGatewayVPCEndpoints
+            Effect: Deny
+            Action:
+              - 'ec2:CreateVpcEndpoint'
+            Resource: '*'
+            Condition:
+              StringEquals:
+                'ec2:VpceServiceName': 'com.amazonaws.*.execute-api'
+
+          # === CLOUDWATCH ===
+          # Source: scp-cost-logging.yaml - DenyHighCostCloudWatchFeatures (safe parts only)
+          - Sid: DenyDetailedMonitoring
+            Effect: Deny
+            Action:
+              - 'ec2:MonitorInstances'
+            Resource: '*'
+
+          - Sid: DenyContainerInsightsEnhanced
+            Effect: Deny
+            Action:
+              - 'ecs:PutAccountSetting'
+              - 'eks:UpdateClusterConfig'
+            Resource: '*'
+            Condition:
+              StringLike:
+                'ecs:container-insights': 'enhanced'
+
+          # === BEDROCK ===
+          # Source: scp-cost-serverless.yaml - DenyHighCostBedrockFeatures
+          - Sid: DenyBedrockProvisionedThroughput
+            Effect: Deny
+            Action:
+              - 'bedrock:CreateProvisionedModelThroughput'
+              - 'bedrock:UpdateProvisionedModelThroughput'
+            Resource: '*'
+
+          - Sid: DenyBedrockCustomModels
+            Effect: Deny
+            Action:
+              - 'bedrock:CreateModelCustomizationJob'
+              - 'bedrock:CreateModelImportJob'
+            Resource: '*'
+
+          - Sid: DenyBedrockMarketplace
+            Effect: Deny
+            Action:
+              - 'bedrock:CreateMarketplaceModelEndpoint'
+              - 'bedrock:RegisterMarketplaceModelEndpoint'
             Resource: '*'
 
           # === SECURITY/COMPLIANCE ===

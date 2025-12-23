@@ -6,19 +6,19 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: "Service Control Policies for AWS Organizations - Cost optimization policies for ec2 services (NOT DEPLOYED - see scp-cost.yaml)"
 
 # =============================================================================
-# STATUS: PARTIALLY MIGRATED TO scp-cost.yaml
+# STATUS: FULLY MIGRATED TO scp-cost.yaml
 # =============================================================================
 #
 # MIGRATED (now in scp-cost.yaml):
-# - DenyRunInstances                      -> DenyEC2Instances
-# - DenyExpensiveStorageFeatures/DenyFSx  -> DenyExpensiveStorage
-# - DenyExpensiveNetworkingFeatures/DenyNATGateway        -> DenyNATGateway
+# - DenyRunInstances                              -> DenyEC2Instances
+# - DenyExpensiveStorageFeatures/DenyFSx          -> DenyExpensiveStorage
+# - DenyExpensiveStorageFeatures/DenyProvisionedIOPS -> DenyNonGP3Volumes
+# - DenyExpensiveStorageFeatures/DenyEFSProvisionedThroughput -> DenyEFSProvisionedThroughput
+# - DenyExpensiveNetworkingFeatures/DenyNATGateway -> DenyNATGateway
 # - DenyExpensiveNetworkingFeatures/DenyVPCInterfaceEndpoints -> DenyVPCInterfaceEndpoints
 #
-# NOT MIGRATED (kept below for reference - considered too risky/edge case):
-# - DenyProvisionedIOPS        (may need io2 for specific workloads)
-# - DenyEFSProvisionedThroughput (EFS condition may not work reliably)
-# - DenyLoadBalancers          (may need ALB for WebSockets, complex routing)
+# NOT MIGRATED (kept below for reference - may need in specific cases):
+# - DenyLoadBalancers (may need ALB for WebSockets, complex routing)
 #
 # =============================================================================
 
@@ -29,45 +29,8 @@ Parameters:
 
 Resources:
   # =============================================================================
-  # REMAINING POLICIES - NOT MIGRATED (risky or edge case)
+  # REMAINING POLICIES - NOT MIGRATED (may need in specific cases)
   # =============================================================================
-
-  # Blocks expensive storage features with provisioned capacity
-  # WARNING: May be too restrictive. gp3 is good default but io2 has valid use cases.
-  # EFS condition may not work reliably in SCPs.
-  DenyExpensiveStorageFeatures:
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
-    Type: AWS::Organizations::Policy
-    Properties:
-      Type: SERVICE_CONTROL_POLICY
-      Name: DenyExpensiveStorageFeatures
-      Description: |
-        Block expensive storage features with provisioned capacity or hourly charges.
-        WARNING: May be too restrictive. Review before deploying.
-      Content:
-        Version: 2012-10-17
-        Statement:
-          - Sid: DenyProvisionedIOPS
-            Effect: Deny
-            Action:
-              - 'ec2:CreateVolume'
-              - 'ec2:ModifyVolume'
-            Resource: '*'
-            Condition:
-              StringNotEquals:
-                'ec2:VolumeType': 'gp3'
-          - Sid: DenyEFSProvisionedThroughput
-            Effect: Deny
-            Action:
-              - 'elasticfilesystem:CreateFileSystem'
-              - 'elasticfilesystem:ModifyThroughputMode'
-            Resource: '*'
-            Condition:
-              StringEquals:
-                'elasticfilesystem:ThroughputMode': 'provisioned'
-      TargetIds:
-        - !Ref OrganizationRootId
 
   # Blocks load balancer creation
   # WARNING: May need ALB for WebSockets, gRPC, or complex routing that
@@ -94,11 +57,6 @@ Resources:
         - !Ref OrganizationRootId
 
 Outputs:
-  DenyExpensiveStorageFeaturesPolicyId:
-    Description: Expensive Storage Features Deny SCP Policy ID
-    Value: !Ref DenyExpensiveStorageFeatures
-    Export:
-      Name: !Sub "${AWS::StackName}-DenyExpensiveStorageFeatures-PolicyId"
   DenyLoadBalancersPolicyId:
     Description: Load Balancers Deny SCP Policy ID
     Value: !Ref DenyLoadBalancers
