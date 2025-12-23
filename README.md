@@ -28,10 +28,12 @@ CloudFormation will use for deployments.
 1. Copy the output **Role ARN**. later needed when configuring
    the CloudFormation Stack.
 
-Manually create a CloudFormation stack with the **Sync from Git**
-option in the AWS console. Use the **Role ARN** from the script
-output as the `IAM execution role`. Has to point to the repo mirror
-on GitHub and to use `cfn-stack.yaml` as entrypoint.
+The second one-off task is to Create the CloudFormation stacks
+with **Sync from Git** through the AWS console. Use the
+**Role ARN** from the script output as the `IAM execution role`.
+Has to point to the repo mirror on GitHub and every
+`stack-deployment-X.yaml` in the project root.
+Create one Cfn stack per entry point file.
 
 ## Source
 
@@ -58,7 +60,7 @@ are also always welcome.
 
 ## License
 
-Unless otherwise stated: `MIT`
+Unless otherwise stated: `MIT-0`
 
 All files contain license information either as
 `header comment` or `corresponding .license` file.
