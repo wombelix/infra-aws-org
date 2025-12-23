@@ -3,20 +3,22 @@
 # SPDX-License-Identifier: MIT-0
 
 AWSTemplateFormatVersion: '2010-09-09'
-Description: "Service Control Policies for AWS Organizations - Cost optimization policies for logging services (NOT DEPLOYED - see scp-cost.yaml)"
+Description: "Service Control Policies for AWS Organizations - Cost optimization policies for logging services (MOSTLY MIGRATED - see scp-cost.yaml)"
 
 # =============================================================================
-# STATUS: PARTIALLY MIGRATED TO scp-cost.yaml
+# STATUS: MOSTLY MIGRATED TO scp-cost.yaml
 # =============================================================================
 #
 # MIGRATED (now in scp-cost.yaml):
 # - DenySecurityHubActions                        -> DenySecurityHub
 # - DenyHighCostCloudWatchFeatures/DenyDetailedMonitoring -> DenyDetailedMonitoring
 # - DenyHighCostCloudWatchFeatures/DenyContainerInsightsEnhanced -> DenyContainerInsightsEnhanced
+# - DenyHighCostEventBridgeFeatures/DenyEventArchive -> DenyEventBridgeArchive
+# - DenyHighCostEventBridgeFeatures/DenyEventReplay -> DenyEventBridgeReplay
+# - DenyHighCostEventBridgeFeatures/DenySchemaDiscovery -> DenySchemaDiscovery
 #
-# NOT MIGRATED (kept below for reference - risky or low value):
-# - DenyHighCostEventBridgeFeatures  (archive/replay useful for debugging, low cost)
-# - DenyHighResolutionMetrics        (DANGEROUS - breaks all custom metrics!)
+# NOT MIGRATED (kept below as WARNING - DO NOT DEPLOY):
+# - DenyHighResolutionMetrics (DANGEROUS - breaks all custom metrics!)
 #
 # =============================================================================
 
@@ -27,46 +29,11 @@ Parameters:
 
 Resources:
   # =============================================================================
-  # REMAINING POLICIES - NOT MIGRATED (risky or low value)
+  # DANGEROUS POLICY - DO NOT DEPLOY
+  # Kept only as a reference for what NOT to do
   # =============================================================================
 
-  # Blocks EventBridge features with storage costs
-  # WARNING: Archive and replay are relatively low cost and can be useful for debugging.
-  # Schema discovery is also low cost. Consider if this is worth blocking.
-  DenyHighCostEventBridgeFeatures:
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
-    Type: AWS::Organizations::Policy
-    Properties:
-      Type: SERVICE_CONTROL_POLICY
-      Name: DenyHighCostEventBridgeFeatures
-      Description: |
-        Block EventBridge features with storage costs while allowing pay-per-event usage.
-        WARNING: Archive/replay are useful for debugging. Consider carefully.
-      Content:
-        Version: 2012-10-17
-        Statement:
-          - Sid: DenyEventArchive
-            Effect: Deny
-            Action:
-              - 'events:CreateArchive'
-              - 'events:UpdateArchive'
-            Resource: '*'
-          - Sid: DenyEventReplay
-            Effect: Deny
-            Action:
-              - 'events:StartReplay'
-            Resource: '*'
-          - Sid: DenySchemaDiscovery
-            Effect: Deny
-            Action:
-              - 'schemas:StartDiscoverer'
-              - 'schemas:CreateDiscoverer'
-            Resource: '*'
-      TargetIds:
-        - !Ref OrganizationRootId
-
-  # DANGER: This policy contains DenyHighResolutionMetrics which blocks ALL PutMetricData!
+  # DANGER: This policy blocks ALL cloudwatch:PutMetricData!
   # This BREAKS: Lambda custom metrics, application metrics, SDK metrics, everything.
   # DO NOT DEPLOY this policy. Kept only as a warning/reference.
   DenyHighResolutionMetrics:
@@ -93,11 +60,6 @@ Resources:
         - !Ref OrganizationRootId
 
 Outputs:
-  DenyHighCostEventBridgeFeaturesPolicyId:
-    Description: EventBridge High-Cost Features Deny SCP Policy ID
-    Value: !Ref DenyHighCostEventBridgeFeatures
-    Export:
-      Name: !Sub "${AWS::StackName}-DenyHighCostEventBridgeFeatures-PolicyId"
   DenyHighResolutionMetricsPolicyId:
     Description: High Resolution Metrics Deny SCP Policy ID (DANGEROUS - DO NOT DEPLOY)
     Value: !Ref DenyHighResolutionMetrics

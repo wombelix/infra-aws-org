@@ -120,6 +120,14 @@ Resources:
               - 'ec2:CreateNatGateway'
             Resource: '*'
 
+          # Source: scp-cost-ec2.yaml - DenyLoadBalancers
+          # No use case in pure serverless (EC2/EKS blocked), use API Gateway instead
+          - Sid: DenyLoadBalancers
+            Effect: Deny
+            Action:
+              - 'elasticloadbalancing:CreateLoadBalancer'
+            Resource: '*'
+
           # Source: scp-cost-ec2.yaml - DenyExpensiveNetworkingFeatures (VPC Endpoints)
           # Allows S3 and DynamoDB gateway endpoints (free), blocks interface endpoints
           - Sid: DenyVPCInterfaceEndpoints
@@ -219,6 +227,29 @@ Resources:
             Action:
               - 'bedrock:CreateMarketplaceModelEndpoint'
               - 'bedrock:RegisterMarketplaceModelEndpoint'
+            Resource: '*'
+
+          # === EVENTBRIDGE ===
+          # Source: scp-cost-logging.yaml - DenyHighCostEventBridgeFeatures
+          # Archives and replay can accumulate storage costs if forgotten
+          - Sid: DenyEventBridgeArchive
+            Effect: Deny
+            Action:
+              - 'events:CreateArchive'
+              - 'events:UpdateArchive'
+            Resource: '*'
+
+          - Sid: DenyEventBridgeReplay
+            Effect: Deny
+            Action:
+              - 'events:StartReplay'
+            Resource: '*'
+
+          - Sid: DenySchemaDiscovery
+            Effect: Deny
+            Action:
+              - 'schemas:StartDiscoverer'
+              - 'schemas:CreateDiscoverer'
             Resource: '*'
 
           # === SECURITY/COMPLIANCE ===
