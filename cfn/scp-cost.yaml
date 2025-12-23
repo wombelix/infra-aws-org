@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: MIT-0
 
 AWSTemplateFormatVersion: '2010-09-09'
-Description: "Service Control Policies for AWS Organizations - Cost optimization (consolidated)"
+Description: "Service Control Policies - Cost optimization"
 
 Parameters:
   OrganizationRootId:
@@ -11,11 +11,6 @@ Parameters:
     Description: "AWS Organizations root ID (e.g., r-xxxx)"
 
 Resources:
-  # =============================================================================
-  # CONSOLIDATED COST OPTIMIZATION POLICY
-  # Blocks services with monthly base costs - enforces true pay-per-use serverless
-  # =============================================================================
-
   DenyExpensiveServices:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
@@ -23,22 +18,18 @@ Resources:
     Properties:
       Type: SERVICE_CONTROL_POLICY
       Name: DenyExpensiveServices
-      Description: |
-        Block expensive services with monthly base costs - enforce true pay-per-use serverless.
-        Consolidated from scp-cost-database, scp-cost-ec2, scp-cost-logging, scp-cost-serverless.
+      Description: "Block services with monthly base costs. Enforce pay-per-use serverless only."
       Content:
         Version: 2012-10-17
         Statement:
-          # === COMPUTE ===
-          # Source: scp-cost-ec2.yaml - DenyRunInstances
+          # Block EC2 - use Lambda/Fargate instead
           - Sid: DenyEC2Instances
             Effect: Deny
             Action:
               - 'ec2:RunInstances'
             Resource: '*'
 
-          # === DATABASES ===
-          # Source: scp-cost-database.yaml - DenyExpensiveDatabaseServices (partial)
+          # Block databases with hourly costs - use DynamoDB on-demand instead
           - Sid: DenyExpensiveDatabases
             Effect: Deny
             Action:
@@ -56,9 +47,7 @@ Resources:
               - 'dax:*'
             Resource: '*'
 
-          # === STREAMING/MESSAGING ===
-          # Source: scp-cost-database.yaml - DenyKinesis, DenyMSK
-          # Source: scp-cost-serverless.yaml - DenyAmazonMQ
+          # Block streaming with hourly costs - use SQS/SNS/EventBridge instead
           - Sid: DenyStreamingAndMessaging
             Effect: Deny
             Action:
@@ -71,8 +60,7 @@ Resources:
               - 'mq:*'
             Resource: '*'
 
-          # === CONTAINERS/BIG DATA ===
-          # Source: scp-cost-database.yaml - DenyEKS, DenyEMR
+          # Block container orchestration with base costs
           - Sid: DenyContainersAndBigData
             Effect: Deny
             Action:
@@ -82,15 +70,14 @@ Resources:
               - 'emr-serverless:*'
             Resource: '*'
 
-          # === STORAGE ===
-          # Source: scp-cost-ec2.yaml - DenyExpensiveStorageFeatures
+          # Block FSx - high base costs
           - Sid: DenyExpensiveStorage
             Effect: Deny
             Action:
               - 'fsx:*'
             Resource: '*'
 
-          # Source: scp-cost-ec2.yaml - DenyExpensiveStorageFeatures (gp3 only)
+          # Force gp3 volumes - cheapest and best performance
           - Sid: DenyNonGP3Volumes
             Effect: Deny
             Action:
@@ -101,7 +88,7 @@ Resources:
               StringNotEquals:
                 'ec2:VolumeType': 'gp3'
 
-          # Source: scp-cost-ec2.yaml - DenyExpensiveStorageFeatures (EFS provisioned)
+          # Block EFS provisioned throughput - bursting mode is free
           - Sid: DenyEFSProvisionedThroughput
             Effect: Deny
             Action:
@@ -112,24 +99,21 @@ Resources:
               StringEquals:
                 'elasticfilesystem:ThroughputMode': 'provisioned'
 
-          # === NETWORKING ===
-          # Source: scp-cost-ec2.yaml - DenyExpensiveNetworkingFeatures (NAT Gateway)
+          # Block NAT Gateway - $32/month base + data charges
           - Sid: DenyNATGateway
             Effect: Deny
             Action:
               - 'ec2:CreateNatGateway'
             Resource: '*'
 
-          # Source: scp-cost-ec2.yaml - DenyLoadBalancers
-          # No use case in pure serverless (EC2/EKS blocked), use API Gateway instead
+          # Block load balancers - no use case without EC2/EKS, use API Gateway
           - Sid: DenyLoadBalancers
             Effect: Deny
             Action:
               - 'elasticloadbalancing:CreateLoadBalancer'
             Resource: '*'
 
-          # Source: scp-cost-ec2.yaml - DenyExpensiveNetworkingFeatures (VPC Endpoints)
-          # Allows S3 and DynamoDB gateway endpoints (free), blocks interface endpoints
+          # Block VPC interface endpoints - $7/month each, allow free S3/DynamoDB gateways
           - Sid: DenyVPCInterfaceEndpoints
             Effect: Deny
             Action:
@@ -141,15 +125,14 @@ Resources:
                   - 'com.amazonaws.*.s3'
                   - 'com.amazonaws.*.dynamodb'
 
-          # === LAMBDA ===
-          # Source: scp-cost-serverless.yaml - DenyHighCostLambdaFeatures
+          # Block Lambda provisioned concurrency - hourly cost even when idle
           - Sid: DenyLambdaProvisionedConcurrency
             Effect: Deny
             Action:
               - 'lambda:PutProvisionedConcurrencyConfig'
             Resource: '*'
 
-          # Source: scp-cost-serverless.yaml - DenyHighCostLambdaFeatures (provisioned ESM)
+          # Block Lambda provisioned event source mapping - hourly polling cost
           - Sid: DenyLambdaProvisionedESM
             Effect: Deny
             Action:
@@ -160,15 +143,14 @@ Resources:
               'Null':
                 'lambda:ProvisionedPollerConfig': 'false'
 
-          # === DYNAMODB ===
-          # Source: scp-cost-serverless.yaml - DenyHighCostDynamoDBFeatures
-          # Note: Skipping BillingMode condition (unreliable), keeping reserved capacity + global tables
+          # Block DynamoDB reserved capacity - upfront commitment
           - Sid: DenyDynamoDBReservedCapacity
             Effect: Deny
             Action:
               - 'dynamodb:PurchaseReservedCapacityOfferings'
             Resource: '*'
 
+          # Block DynamoDB global tables - multiplies costs per region
           - Sid: DenyDynamoDBGlobalTables
             Effect: Deny
             Action:
@@ -177,8 +159,7 @@ Resources:
               - 'dynamodb:CreateTableReplica'
             Resource: '*'
 
-          # === API GATEWAY ===
-          # Source: scp-cost-serverless.yaml - DenyHighCostAPIGatewayFeatures (VPC endpoints only)
+          # Block private API Gateway endpoints - $7/month per VPC endpoint
           - Sid: DenyAPIGatewayVPCEndpoints
             Effect: Deny
             Action:
@@ -188,14 +169,14 @@ Resources:
               StringEquals:
                 'ec2:VpceServiceName': 'com.amazonaws.*.execute-api'
 
-          # === CLOUDWATCH ===
-          # Source: scp-cost-logging.yaml - DenyHighCostCloudWatchFeatures (safe parts only)
+          # Block detailed EC2 monitoring - per-metric costs
           - Sid: DenyDetailedMonitoring
             Effect: Deny
             Action:
               - 'ec2:MonitorInstances'
             Resource: '*'
 
+          # Block enhanced container insights - higher metric costs
           - Sid: DenyContainerInsightsEnhanced
             Effect: Deny
             Action:
@@ -206,8 +187,7 @@ Resources:
               StringLike:
                 'ecs:container-insights': 'enhanced'
 
-          # === BEDROCK ===
-          # Source: scp-cost-serverless.yaml - DenyHighCostBedrockFeatures
+          # Block Bedrock provisioned throughput - hourly commitment
           - Sid: DenyBedrockProvisionedThroughput
             Effect: Deny
             Action:
@@ -215,6 +195,7 @@ Resources:
               - 'bedrock:UpdateProvisionedModelThroughput'
             Resource: '*'
 
+          # Block Bedrock custom models - training and hosting costs
           - Sid: DenyBedrockCustomModels
             Effect: Deny
             Action:
@@ -222,6 +203,7 @@ Resources:
               - 'bedrock:CreateModelImportJob'
             Resource: '*'
 
+          # Block Bedrock marketplace models - additional licensing costs
           - Sid: DenyBedrockMarketplace
             Effect: Deny
             Action:
@@ -229,9 +211,7 @@ Resources:
               - 'bedrock:RegisterMarketplaceModelEndpoint'
             Resource: '*'
 
-          # === EVENTBRIDGE ===
-          # Source: scp-cost-logging.yaml - DenyHighCostEventBridgeFeatures
-          # Archives and replay can accumulate storage costs if forgotten
+          # Block EventBridge archives - storage costs accumulate if forgotten
           - Sid: DenyEventBridgeArchive
             Effect: Deny
             Action:
@@ -239,12 +219,14 @@ Resources:
               - 'events:UpdateArchive'
             Resource: '*'
 
+          # Block EventBridge replay - requires archive which has storage costs
           - Sid: DenyEventBridgeReplay
             Effect: Deny
             Action:
               - 'events:StartReplay'
             Resource: '*'
 
+          # Block schema discovery - per-event costs
           - Sid: DenySchemaDiscovery
             Effect: Deny
             Action:
@@ -252,17 +234,14 @@ Resources:
               - 'schemas:CreateDiscoverer'
             Resource: '*'
 
-          # === SECURITY/COMPLIANCE ===
-          # Source: scp-cost-logging.yaml - DenySecurityHubActions
+          # Block Security Hub - per-check costs
           - Sid: DenySecurityHub
             Effect: Deny
             Action:
               - 'securityhub:*'
             Resource: '*'
 
-          # === EXPENSIVE COMMITMENTS ===
-          # Block actions that create long-term commitments or high fixed costs
-          # See: https://github.com/iann0036/iam-actions-cost
+          # Block expensive commitments and subscriptions
           - Sid: DenyExpensiveCommitments
             Effect: Deny
             Action:
