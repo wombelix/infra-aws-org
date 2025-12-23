@@ -55,6 +55,8 @@ Resources:
               NumericLessThan:
                 's3:TlsVersion':
                   - '1.2'
+          # Exclude CloudFormation template buckets (cf-templates-*) - AWS doesn't enforce
+          # encryption headers when uploading templates via the CloudFormation console/API
           - Sid: EnforceEncryption
             Effect: Deny
             Principal: '*'
@@ -64,6 +66,8 @@ Resources:
             Condition:
               'Null':
                 's3:x-amz-server-side-encryption': 'true'
+              ArnNotLike:
+                's3:ResourceArn': 'arn:aws:s3:::cf-templates-*/*'
           - Sid: DenyS3PublicAccess
             Effect: Deny
             Principal: '*'
