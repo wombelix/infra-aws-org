@@ -1,0 +1,138 @@
+# SPDX-FileCopyrightText: 2025 Dominik Wombacher <dominik@wombacher.cc>
+#
+# SPDX-License-Identifier: MIT-0
+
+AWSTemplateFormatVersion: '2010-09-09'
+Description: "Service Control Policies for AWS Organizations - Cost optimization (consolidated)"
+
+Parameters:
+  OrganizationRootId:
+    Type: String
+    Description: "AWS Organizations root ID (e.g., r-xxxx)"
+
+Resources:
+  # =============================================================================
+  # CONSOLIDATED COST OPTIMIZATION POLICY
+  # Blocks services with monthly base costs - enforces true pay-per-use serverless
+  # =============================================================================
+
+  DenyExpensiveServices:
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Type: AWS::Organizations::Policy
+    Properties:
+      Type: SERVICE_CONTROL_POLICY
+      Name: DenyExpensiveServices
+      Description: |
+        Block expensive services with monthly base costs - enforce true pay-per-use serverless.
+        Consolidated from scp-cost-database, scp-cost-ec2, scp-cost-logging, scp-cost-serverless.
+      Content:
+        Version: 2012-10-17
+        Statement:
+          # === COMPUTE ===
+          # Source: scp-cost-ec2.yaml - DenyRunInstances
+          - Sid: DenyEC2Instances
+            Effect: Deny
+            Action:
+              - 'ec2:RunInstances'
+            Resource: '*'
+
+          # === DATABASES ===
+          # Source: scp-cost-database.yaml - DenyExpensiveDatabaseServices (partial)
+          - Sid: DenyExpensiveDatabases
+            Effect: Deny
+            Action:
+              - 'rds:*'
+              - 'elasticache:*'
+              - 'redshift:*'
+              - 'redshift-data:*'
+              - 'redshift-serverless:*'
+              - 'es:*'
+              - 'opensearch:*'
+              - 'memorydb:*'
+              - 'docdb:*'
+              - 'neptune:*'
+              - 'neptune-db:*'
+              - 'dax:*'
+            Resource: '*'
+
+          # === STREAMING/MESSAGING ===
+          # Source: scp-cost-database.yaml - DenyKinesis, DenyMSK
+          # Source: scp-cost-serverless.yaml - DenyAmazonMQ
+          - Sid: DenyStreamingAndMessaging
+            Effect: Deny
+            Action:
+              - 'kinesis:*'
+              - 'kinesisanalytics:*'
+              - 'kinesisanalyticsv2:*'
+              - 'kinesisvideo:*'
+              - 'kafka:*'
+              - 'kafka-cluster:*'
+              - 'mq:*'
+            Resource: '*'
+
+          # === CONTAINERS/BIG DATA ===
+          # Source: scp-cost-database.yaml - DenyEKS, DenyEMR
+          - Sid: DenyContainersAndBigData
+            Effect: Deny
+            Action:
+              - 'eks:*'
+              - 'emr:*'
+              - 'emr-containers:*'
+              - 'emr-serverless:*'
+            Resource: '*'
+
+          # === STORAGE ===
+          # Source: scp-cost-ec2.yaml - DenyExpensiveStorageFeatures (FSx only)
+          - Sid: DenyExpensiveStorage
+            Effect: Deny
+            Action:
+              - 'fsx:*'
+            Resource: '*'
+
+          # === NETWORKING ===
+          # Source: scp-cost-ec2.yaml - DenyExpensiveNetworkingFeatures (NAT Gateway)
+          - Sid: DenyNATGateway
+            Effect: Deny
+            Action:
+              - 'ec2:CreateNatGateway'
+            Resource: '*'
+
+          # Source: scp-cost-ec2.yaml - DenyExpensiveNetworkingFeatures (VPC Endpoints)
+          # Allows S3 and DynamoDB gateway endpoints (free), blocks interface endpoints
+          - Sid: DenyVPCInterfaceEndpoints
+            Effect: Deny
+            Action:
+              - 'ec2:CreateVpcEndpoint'
+            Resource: '*'
+            Condition:
+              StringNotEquals:
+                'ec2:VpceServiceName':
+                  - 'com.amazonaws.*.s3'
+                  - 'com.amazonaws.*.dynamodb'
+
+          # === LAMBDA ===
+          # Source: scp-cost-serverless.yaml - DenyHighCostLambdaFeatures (provisioned only)
+          - Sid: DenyLambdaProvisionedConcurrency
+            Effect: Deny
+            Action:
+              - 'lambda:PutProvisionedConcurrencyConfig'
+            Resource: '*'
+
+          # === SECURITY/COMPLIANCE ===
+          # Source: scp-cost-logging.yaml - DenySecurityHubActions
+          - Sid: DenySecurityHub
+            Effect: Deny
+            Action:
+              - 'securityhub:*'
+            Resource: '*'
+
+      TargetIds:
+        - !Ref OrganizationRootId
+
+Outputs:
+  DenyExpensiveServicesPolicyId:
+    Description: Consolidated Cost Optimization SCP Policy ID
+    Value: !Ref DenyExpensiveServices
+    Export:
+      Name: !Sub "${AWS::StackName}-DenyExpensiveServices-PolicyId"

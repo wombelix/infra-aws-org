@@ -3,7 +3,29 @@
 # SPDX-License-Identifier: MIT-0
 
 AWSTemplateFormatVersion: '2010-09-09'
-Description: "Service Control Policies for AWS Organizations - Cost optimization policies"
+Description: "Service Control Policies for AWS Organizations - Cost optimization policies (NOT DEPLOYED - see scp-cost.yaml)"
+
+# =============================================================================
+# STATUS: PARTIALLY MIGRATED TO scp-cost.yaml
+# =============================================================================
+#
+# MIGRATED (now in scp-cost.yaml):
+# - DenyRDSAndAurora         -> DenyExpensiveDatabases
+# - DenyElastiCache          -> DenyExpensiveDatabases
+# - DenyRedshift             -> DenyExpensiveDatabases
+# - DenyOpenSearch           -> DenyExpensiveDatabases
+# - DenyMemoryDB             -> DenyExpensiveDatabases
+# - DenyDocumentDB           -> DenyExpensiveDatabases
+# - DenyNeptune              -> DenyExpensiveDatabases
+# - DenyKinesis              -> DenyStreamingAndMessaging
+# - DenyMSK                  -> DenyStreamingAndMessaging
+# - DenyEKS                  -> DenyContainersAndBigData
+# - DenyEMR                  -> DenyContainersAndBigData
+#
+# NOT MIGRATED (kept below for reference - considered too risky/edge case):
+# - DenyECSPersistentServices  (partial ECS block is confusing, may break Fargate tasks)
+#
+# =============================================================================
 
 Parameters:
   OrganizationRootId:
@@ -12,89 +34,26 @@ Parameters:
 
 Resources:
   # =============================================================================
-  # COST OPTIMIZATION POLICIES - DATABASE AND COMPUTE SERVICES
+  # REMAINING POLICIES - NOT MIGRATED (risky or edge case)
   # =============================================================================
 
-  # Blocks expensive database and compute services with monthly minimums
-  # Why: Forces true pay-per-use serverless architecture with zero monthly minimums
-  DenyExpensiveDatabaseServices:
+  # Blocks persistent ECS services
+  # WARNING: This is a partial block that may be confusing. ECS with Fargate
+  # can be used in a serverless way (tasks), but services run 24/7.
+  # NOT RECOMMENDED for deployment without careful consideration.
+  DenyECSPersistentServices:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Type: AWS::Organizations::Policy
     Properties:
       Type: SERVICE_CONTROL_POLICY
-      Name: DenyExpensiveDatabaseServices
+      Name: DenyECSPersistentServices
       Description: |
-        Block expensive database and compute services with monthly minimums - force true pay-per-use serverless.
-        See: https://docs.aws.amazon.com/whitepapers/latest/serverless-architectures-lambda/serverless-architectures-lambda.pdf
+        Block persistent ECS services to prevent 24/7 container costs.
+        WARNING: May break legitimate Fargate usage. Consider carefully before deploying.
       Content:
         Version: 2012-10-17
         Statement:
-          - Sid: DenyRDSAndAurora
-            Effect: Deny
-            Action:
-              - 'rds:*'
-            Resource: '*'
-          - Sid: DenyElastiCache
-            Effect: Deny
-            Action:
-              - 'elasticache:*'
-            Resource: '*'
-          - Sid: DenyRedshift
-            Effect: Deny
-            Action:
-              - 'redshift:*'
-              - 'redshift-data:*'
-              - 'redshift-serverless:*'
-            Resource: '*'
-          - Sid: DenyOpenSearch
-            Effect: Deny
-            Action:
-              - 'es:*'
-              - 'opensearch:*'
-            Resource: '*'
-          - Sid: DenyMemoryDB
-            Effect: Deny
-            Action:
-              - 'memorydb:*'
-            Resource: '*'
-          - Sid: DenyDocumentDB
-            Effect: Deny
-            Action:
-              - 'docdb:*'
-            Resource: '*'
-          - Sid: DenyNeptune
-            Effect: Deny
-            Action:
-              - 'neptune:*'
-              - 'neptune-db:*'
-            Resource: '*'
-          - Sid: DenyKinesis
-            Effect: Deny
-            Action:
-              - 'kinesis:*'
-              - 'kinesisanalytics:*'
-              - 'kinesisanalyticsv2:*'
-              - 'kinesisvideo:*'
-            Resource: '*'
-          - Sid: DenyMSK
-            Effect: Deny
-            Action:
-              - 'kafka:*'
-              - 'kafka-cluster:*'
-            Resource: '*'
-          - Sid: DenyEKS
-            Effect: Deny
-            Action:
-              - 'eks:*'
-            Resource: '*'
-          - Sid: DenyEMR
-            Effect: Deny
-            Action:
-              - 'emr:*'
-              - 'emr-containers:*'
-              - 'emr-serverless:*'
-            Resource: '*'
           - Sid: DenyECSPersistentServices
             Effect: Deny
             Action:
@@ -107,11 +66,9 @@ Resources:
       TargetIds:
         - !Ref OrganizationRootId
 
-
-
 Outputs:
-  DenyExpensiveDatabaseServicesPolicyId:
-    Description: Expensive DB Services Deny SCP Policy ID
-    Value: !Ref DenyExpensiveDatabaseServices
+  DenyECSPersistentServicesPolicyId:
+    Description: ECS Persistent Services Deny SCP Policy ID
+    Value: !Ref DenyECSPersistentServices
     Export:
-      Name: !Sub "${AWS::StackName}-DenyExpensiveDatabaseServices-PolicyId"
+      Name: !Sub "${AWS::StackName}-DenyECSPersistentServices-PolicyId"

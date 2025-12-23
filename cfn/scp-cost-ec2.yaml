@@ -3,7 +3,24 @@
 # SPDX-License-Identifier: MIT-0
 
 AWSTemplateFormatVersion: '2010-09-09'
-Description: "Service Control Policies for AWS Organizations - Cost optimization policies for ec2 services"
+Description: "Service Control Policies for AWS Organizations - Cost optimization policies for ec2 services (NOT DEPLOYED - see scp-cost.yaml)"
+
+# =============================================================================
+# STATUS: PARTIALLY MIGRATED TO scp-cost.yaml
+# =============================================================================
+#
+# MIGRATED (now in scp-cost.yaml):
+# - DenyRunInstances                      -> DenyEC2Instances
+# - DenyExpensiveStorageFeatures/DenyFSx  -> DenyExpensiveStorage
+# - DenyExpensiveNetworkingFeatures/DenyNATGateway        -> DenyNATGateway
+# - DenyExpensiveNetworkingFeatures/DenyVPCInterfaceEndpoints -> DenyVPCInterfaceEndpoints
+#
+# NOT MIGRATED (kept below for reference - considered too risky/edge case):
+# - DenyProvisionedIOPS        (may need io2 for specific workloads)
+# - DenyEFSProvisionedThroughput (EFS condition may not work reliably)
+# - DenyLoadBalancers          (may need ALB for WebSockets, complex routing)
+#
+# =============================================================================
 
 Parameters:
   OrganizationRootId:
@@ -12,34 +29,12 @@ Parameters:
 
 Resources:
   # =============================================================================
-  # COST OPTIMIZATION POLICIES - EC2 SERVICES
+  # REMAINING POLICIES - NOT MIGRATED (risky or edge case)
   # =============================================================================
 
-  # Blocks all EC2 instance launches
-  # Why: Enforces serverless-first architecture and prevents unexpected compute costs
-  DenyRunInstances:
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
-    Type: AWS::Organizations::Policy
-    Properties:
-      Type: SERVICE_CONTROL_POLICY
-      Name: DenyRunInstances
-      Description: |
-        Block all EC2 instance launches to enforce serverless-first architecture and prevent unexpected compute costs.
-        See: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-best-practices.html
-      Content:
-        Version: 2012-10-17
-        Statement:
-          - Sid: DenyRunInstances
-            Effect: Deny
-            Action:
-              - 'ec2:RunInstances'
-            Resource: '*'
-      TargetIds:
-        - !Ref OrganizationRootId
-
-  # Blocks expensive storage features with provisioned capacity or hourly charges
-  # Why: Forces cost-effective storage options and prevents accidental high-cost configurations
+  # Blocks expensive storage features with provisioned capacity
+  # WARNING: May be too restrictive. gp3 is good default but io2 has valid use cases.
+  # EFS condition may not work reliably in SCPs.
   DenyExpensiveStorageFeatures:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
@@ -49,7 +44,7 @@ Resources:
       Name: DenyExpensiveStorageFeatures
       Description: |
         Block expensive storage features with provisioned capacity or hourly charges.
-        See: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/EBSVolumeTypes.html
+        WARNING: May be too restrictive. Review before deploying.
       Content:
         Version: 2012-10-17
         Statement:
@@ -71,65 +66,41 @@ Resources:
             Condition:
               StringEquals:
                 'elasticfilesystem:ThroughputMode': 'provisioned'
-          - Sid: DenyFSx
-            Effect: Deny
-            Action:
-              - 'fsx:*'
-            Resource: '*'
       TargetIds:
         - !Ref OrganizationRootId
 
-  # Blocks expensive networking features with hourly charges
-  # Why: Prevents accidental creation of costly networking resources
-  DenyExpensiveNetworkingFeatures:
+  # Blocks load balancer creation
+  # WARNING: May need ALB for WebSockets, gRPC, or complex routing that
+  # API Gateway HTTP APIs don't support.
+  DenyLoadBalancers:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Type: AWS::Organizations::Policy
     Properties:
       Type: SERVICE_CONTROL_POLICY
-      Name: DenyExpensiveNetworkingFeatures
+      Name: DenyLoadBalancers
       Description: |
-        Block expensive networking features with hourly charges.
-        See: https://docs.aws.amazon.com/vpc/latest/userguide/vpc-endpoints.html
+        Block load balancer creation to force API Gateway usage.
+        WARNING: May need ALB for WebSockets or complex routing. Review before deploying.
       Content:
         Version: 2012-10-17
         Statement:
-          - Sid: DenyVPCInterfaceEndpoints
-            Effect: Deny
-            Action:
-              - 'ec2:CreateVpcEndpoint'
-            Resource: '*'
-            Condition:
-              StringNotEquals:
-                'ec2:VpceServiceName':
-                  - 'com.amazonaws.*.s3'
-                  - 'com.amazonaws.*.dynamodb'
           - Sid: DenyLoadBalancers
             Effect: Deny
             Action:
               - 'elasticloadbalancing:CreateLoadBalancer'
             Resource: '*'
-          - Sid: DenyNATGateway
-            Effect: Deny
-            Action:
-              - 'ec2:CreateNatGateway'
-            Resource: '*'
       TargetIds:
         - !Ref OrganizationRootId
 
 Outputs:
-  DenyRunInstancesPolicyId:
-    Description: EC2 Run Instances Deny SCP Policy ID
-    Value: !Ref DenyRunInstances
-    Export:
-      Name: !Sub "${AWS::StackName}-DenyRunInstances-PolicyId"
   DenyExpensiveStorageFeaturesPolicyId:
     Description: Expensive Storage Features Deny SCP Policy ID
     Value: !Ref DenyExpensiveStorageFeatures
     Export:
       Name: !Sub "${AWS::StackName}-DenyExpensiveStorageFeatures-PolicyId"
-  DenyExpensiveNetworkingFeaturesPolicyId:
-    Description: Expensive Networking Features Deny SCP Policy ID
-    Value: !Ref DenyExpensiveNetworkingFeatures
+  DenyLoadBalancersPolicyId:
+    Description: Load Balancers Deny SCP Policy ID
+    Value: !Ref DenyLoadBalancers
     Export:
-      Name: !Sub "${AWS::StackName}-DenyExpensiveNetworkingFeatures-PolicyId"
+      Name: !Sub "${AWS::StackName}-DenyLoadBalancers-PolicyId"

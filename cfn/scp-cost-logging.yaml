@@ -3,7 +3,20 @@
 # SPDX-License-Identifier: MIT-0
 
 AWSTemplateFormatVersion: '2010-09-09'
-Description: "Service Control Policies for AWS Organizations - Cost optimization policies for logging services"
+Description: "Service Control Policies for AWS Organizations - Cost optimization policies for logging services (NOT DEPLOYED - see scp-cost.yaml)"
+
+# =============================================================================
+# STATUS: PARTIALLY MIGRATED TO scp-cost.yaml
+# =============================================================================
+#
+# MIGRATED (now in scp-cost.yaml):
+# - DenySecurityHubActions  -> DenySecurityHub
+#
+# NOT MIGRATED (kept below for reference - considered too risky):
+# - DenyHighCostEventBridgeFeatures  (archive/replay may be useful, low cost)
+# - DenyHighCostCloudWatchFeatures   (BREAKS cloudwatch:PutMetricData - kills all custom metrics!)
+#
+# =============================================================================
 
 Parameters:
   OrganizationRootId:
@@ -12,11 +25,12 @@ Parameters:
 
 Resources:
   # =============================================================================
-  # COST OPTIMIZATION POLICIES - LOGGING SERVICES
+  # REMAINING POLICIES - NOT MIGRATED (risky or breaks things)
   # =============================================================================
 
-  # Blocks EventBridge features with storage costs while allowing pay-per-event usage
-  # Why: Archive and replay features have ongoing storage costs
+  # Blocks EventBridge features with storage costs
+  # WARNING: Archive and replay are relatively low cost and can be useful for debugging.
+  # Schema discovery is also low cost. Consider if this is worth blocking.
   DenyHighCostEventBridgeFeatures:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
@@ -26,7 +40,7 @@ Resources:
       Name: DenyHighCostEventBridgeFeatures
       Description: |
         Block EventBridge features with storage costs while allowing pay-per-event usage.
-        See: https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-archive-replay.html
+        WARNING: Archive/replay are useful for debugging. Consider carefully.
       Content:
         Version: 2012-10-17
         Statement:
@@ -50,8 +64,10 @@ Resources:
       TargetIds:
         - !Ref OrganizationRootId
 
-  # Restricts high-cost CloudWatch features to prevent accidental charges
-  # Why: Detailed monitoring and high-resolution metrics can generate significant costs
+  # Restricts high-cost CloudWatch features
+  # DANGER: DenyHighResolutionMetrics blocks cloudwatch:PutMetricData entirely!
+  # This BREAKS: Lambda custom metrics, application metrics, SDK metrics, everything.
+  # DO NOT DEPLOY without removing DenyHighResolutionMetrics statement.
   DenyHighCostCloudWatchFeatures:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
@@ -60,8 +76,9 @@ Resources:
       Type: SERVICE_CONTROL_POLICY
       Name: DenyHighCostCloudWatchFeatures
       Description: |
-        Restrict high-cost CloudWatch features to prevent accidental charges.
-        See: https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/best-practices.html
+        DANGER: Contains DenyHighResolutionMetrics which blocks ALL PutMetricData.
+        This will break Lambda metrics, custom metrics, and most monitoring.
+        DO NOT DEPLOY without careful review and modification.
       Content:
         Version: 2012-10-17
         Statement:
@@ -84,33 +101,11 @@ Resources:
             Condition:
               StringLike:
                 'ecs:container-insights': 'enhanced'
+          # DANGER: This blocks ALL custom metrics!
           - Sid: DenyHighResolutionMetrics
             Effect: Deny
             Action:
               - 'cloudwatch:PutMetricData'
-            Resource: '*'
-      TargetIds:
-        - !Ref OrganizationRootId
-
-  # Prevents Security Hub usage across all accounts to avoid costs
-  # Why: Security Hub can be expensive and may not provide value in strictly serverless environments
-  DenySecurityHubActions:
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
-    Type: AWS::Organizations::Policy
-    Properties:
-      Type: SERVICE_CONTROL_POLICY
-      Name: DenySecurityHubActions
-      Description: |
-        Prevent Security Hub usage across all accounts to avoid costs.
-        See: https://docs.aws.amazon.com/securityhub/latest/userguide/what-is-securityhub.html
-      Content:
-        Version: 2012-10-17
-        Statement:
-          - Sid: DenySecurityHub
-            Effect: Deny
-            Action:
-              - 'securityhub:*'
             Resource: '*'
       TargetIds:
         - !Ref OrganizationRootId
@@ -126,8 +121,3 @@ Outputs:
     Value: !Ref DenyHighCostCloudWatchFeatures
     Export:
       Name: !Sub "${AWS::StackName}-DenyHighCostCloudWatchFeatures-PolicyId"
-  DenySecurityHubActionsPolicyId:
-    Description: Security Hub Actions Deny SCP Policy ID
-    Value: !Ref DenySecurityHubActions
-    Export:
-      Name: !Sub "${AWS::StackName}-DenySecurityHubActions-PolicyId"
