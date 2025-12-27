@@ -11,7 +11,7 @@ silent: true
 vars:
   AWS_REGION: eu-central-1
   CFN_DIR: cfn
-  IAM_CFN_ROLES_STACK: infra-aws-org-iam-cfn-roles
+  IAM_CFN_ROLES_STACK: iam-cfn-roles
   IAM_CFN_ROLES_TEMPLATE: "{{.CFN_DIR}}/iam-cfn-roles.yaml"
 
 tasks:
@@ -63,7 +63,7 @@ tasks:
   iam-cfn-roles:diff:
     desc: Show changes between deployed stack and local template
     cmds:
-      - rain diff {{.IAM_CFN_ROLES_STACK}} {{.IAM_CFN_ROLES_TEMPLATE}} --region {{.AWS_REGION}}
+      - rain cat {{.IAM_CFN_ROLES_STACK}} --region {{.AWS_REGION}} > /tmp/infra-aws-org-iam-cfn-roles-deployed.yaml && rain diff /tmp/infra-aws-org-iam-cfn-roles-deployed.yaml {{.IAM_CFN_ROLES_TEMPLATE}}; rm -f /tmp/infra-aws-org-iam-cfn-roles-deployed.yaml
 
   iam-cfn-roles:logs:
     desc: Show event logs for the IAM CloudFormation roles stack
