@@ -18,22 +18,44 @@ SPDX-License-Identifier: MIT-0
 
 ## Usage
 
-A one-time manual setup is required to create the IAM role that
-CloudFormation will use for deployments.
+### Prerequisites
 
-1. Run the bootstrap script with permissions to create IAM Roles
-   and Policies in your AWS Organizations Management Account:
-   `./create-cfn-iam-role.sh`
+* [AWS CLI](https://aws.amazon.com/cli/)
+* [Rain](https://github.com/aws-cloudformation/rain)
+* [Task](https://taskfile.dev/)
 
-1. Copy the output **Role ARN**. later needed when configuring
-   the CloudFormation Stack.
+### IAM Roles
 
-The second one-off task is to Create the CloudFormation stacks
-with **Sync from Git** through the AWS console. Use the
-**Role ARN** from the script output as the `IAM execution role`.
-Has to point to the repo mirror on GitHub and every
-`stack-deployment-X.yaml` in the project root.
-Create one Cfn stack per entry point file.
+The IAM roles for CloudFormation are managed in `cfn/iam-cfn-roles.yaml`.
+Two roles exist:
+
+* `CustomerServiceRoleForCloudformationInfraAWSOrg` -
+  Used by CloudFormation to manage AWS Organizations resources
+* `CustomerServiceRoleForCloudformationInfraAWSOrgGitSync` -
+  Used by CodeConnections for Git sync
+
+If these roles already exist in the account, import them into CloudFormation:
+
+```bash
+task iam-cfn-roles:import
+```
+
+If the roles don't exist yet, create them:
+
+```bash
+task iam-cfn-roles:deploy
+```
+
+For future updates, use `task iam-cfn-roles:deploy`.
+
+Run `task` to list all available tasks.
+
+### Git Sync Stacks
+
+Create CloudFormation stacks with Sync from Git through the AWS console.
+Use the Role ARN from `task iam-cfn-roles:deploy` output as IAM execution role.
+Point to the repo mirror on GitHub and each `stack-deployment-X.yaml` file.
+Create one stack per entry point file.
 
 ## Source
 

@@ -1,0 +1,76 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+
+# SPDX-FileCopyrightText: 2025 Dominik Wombacher <dominik@wombacher.cc>
+#
+# SPDX-License-Identifier: MIT-0
+
+version: '3'
+
+silent: true
+
+vars:
+  AWS_REGION: eu-central-1
+  CFN_DIR: cfn
+  IAM_CFN_ROLES_STACK: infra-aws-org-iam-cfn-roles
+  IAM_CFN_ROLES_TEMPLATE: "{{.CFN_DIR}}/iam-cfn-roles.yaml"
+
+tasks:
+  default:
+    desc: List available tasks
+    cmd: task --list
+
+  # Rain doesn't support import existing resources yet, using AWS CLI workaround.
+  # Reference: https://github.com/aws-cloudformation/rain/issues/742
+  #
+  # If import fails mid-way, delete the stuck stack and retry.
+  # Example: aws cloudformation delete-stack --stack-name infra-aws-org-iam-cfn-roles --region eu-central-1
+  iam-cfn-roles:import:
+    desc: Import existing IAM roles into CloudFormation stack (one-time operation)
+    cmds:
+      - echo "Creating import changeset..."
+      - aws cloudformation create-change-set
+          --stack-name {{.IAM_CFN_ROLES_STACK}}
+          --change-set-name import-existing-roles
+          --change-set-type CREATE
+          --template-body file://{{.IAM_CFN_ROLES_TEMPLATE}}
+          --import-existing-resources
+          --capabilities CAPABILITY_NAMED_IAM
+          --region {{.AWS_REGION}}
+          --no-cli-pager
+      - echo "Waiting for changeset..."
+      - aws cloudformation wait change-set-create-complete
+          --stack-name {{.IAM_CFN_ROLES_STACK}}
+          --change-set-name import-existing-roles
+          --region {{.AWS_REGION}}
+      - echo "Executing changeset..."
+      - aws cloudformation execute-change-set
+          --stack-name {{.IAM_CFN_ROLES_STACK}}
+          --change-set-name import-existing-roles
+          --region {{.AWS_REGION}}
+          --no-cli-pager
+      - echo "Waiting for stack creation..."
+      - aws cloudformation wait stack-create-complete
+          --stack-name {{.IAM_CFN_ROLES_STACK}}
+          --region {{.AWS_REGION}}
+      - echo "Import completed!"
+      - rain ls {{.IAM_CFN_ROLES_STACK}} --region {{.AWS_REGION}}
+
+  iam-cfn-roles:deploy:
+    desc: Deploy the IAM CloudFormation roles stack
+    cmds:
+      - rain deploy {{.IAM_CFN_ROLES_TEMPLATE}} {{.IAM_CFN_ROLES_STACK}} --region {{.AWS_REGION}} --yes
+
+  iam-cfn-roles:diff:
+    desc: Show changes between deployed stack and local template
+    cmds:
+      - rain diff {{.IAM_CFN_ROLES_STACK}} {{.IAM_CFN_ROLES_TEMPLATE}} --region {{.AWS_REGION}}
+
+  iam-cfn-roles:logs:
+    desc: Show event logs for the IAM CloudFormation roles stack
+    cmds:
+      - rain logs {{.IAM_CFN_ROLES_STACK}} --region {{.AWS_REGION}}
+
+  iam-cfn-roles:rm:
+    desc: Delete the IAM CloudFormation roles stack
+    cmds:
+      - rain rm {{.IAM_CFN_ROLES_STACK}} --region {{.AWS_REGION}}
