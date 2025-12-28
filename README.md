@@ -20,7 +20,7 @@ SPDX-License-Identifier: MIT-0
 
 ### Prerequisites
 
-* [AWS CLI](https://aws.amazon.com/cli/)
+* [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/)
 * [Rain](https://github.com/aws-cloudformation/rain)
 * [Task](https://taskfile.dev/)
 
