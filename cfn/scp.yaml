@@ -168,7 +168,10 @@ Resources:
               BoolIfExists:
                 "aws:MultiFactorAuthPresent": "false"
               ArnNotLike:
-                "aws:PrincipalARN": "arn:aws:iam::*:role/AWSCloudFormationStackSetExecutionRole"
+                "aws:PrincipalARN":
+                  - "arn:aws:iam::*:role/AWSCloudFormationStackSetExecutionRole"
+                  - "arn:aws:iam::*:role/CloudFormationExecutionRole"
+                  - "arn:aws:sts::*:assumed-role/AWSReservedSSO_AdministratorAccess_*/*"
 
           # Prevent irreversible data lock-in actions
           # These can lock data making it impossible to delete or modify
