@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: 2025 Dominik Wombacher <dominik@wombacher.cc>
 #
-# SPDX-License-Identifier: MIT-0
+# SPDX-License-Identifier: Apache-2.0
 
 AWSTemplateFormatVersion: '2010-09-09'
 Description: Infrastructure as Code (IaC) resources for management account - GitHub OIDC, backend access, and StackSet for member accounts
