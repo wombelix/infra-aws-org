@@ -70,12 +70,12 @@ and
 
 ## Contribute
 
-Please don't hesitate to provide Feedback,
-open an Issue or create a Pull / Merge Request.
+Please don't hesitate to provide feedback,
+open an issue, or create a Pull / Merge Request.
 
 Just pick the workflow or platform you prefer and are most comfortable with.
 
-Feedback, bug reports or patches to my sr.ht list
+Feedback, bug reports, or patches sent to my sr.ht list
 [~wombelix/inbox@lists.sr.ht](https://lists.sr.ht/~wombelix/inbox) or via
 [Email and Instant Messaging](https://dominik.wombacher.cc/pages/contact.html)
 are also always welcome.
