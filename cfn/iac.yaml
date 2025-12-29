@@ -1,0 +1,186 @@
+# SPDX-FileCopyrightText: 2025 Dominik Wombacher <dominik@wombacher.cc>
+#
+# SPDX-License-Identifier: MIT-0
+
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Infrastructure as Code (IaC) resources for management account - GitHub OIDC, backend access, and StackSet for member accounts
+
+Parameters:
+  AutomationAccountId:
+    Type: String
+    Description: AWS Account ID of the automation account where the OpenTofu backend resides
+    AllowedPattern: '^\d{12}$'
+    ConstraintDescription: Must be a valid 12-digit AWS Account ID
+  AwsOrgOUIdProjects:
+    Type: String
+    Description: Organizational Unit ID for project accounts
+    AllowedPattern: '^ou-[a-z0-9]{4,32}-[a-z0-9]{8,32}$'
+    ConstraintDescription: Must be a valid OU ID (e.g., ou-xxxx-xxxxxxxx)
+  OpenTofuRemoteBackendBucketName:
+    Type: String
+    Description: Name of the S3 bucket for OpenTofu state in the automation account
+    AllowedPattern: '^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$'
+    ConstraintDescription: Must be a valid S3 bucket name
+  OpenTofuRemoteBackendDDBTableName:
+    Type: String
+    Description: Name of the DynamoDB table for OpenTofu state locking in the automation account
+    AllowedPattern: '^[a-zA-Z0-9._-]+$'
+    ConstraintDescription: Must be a valid DynamoDB table name
+  OpenTofuRemoteBackendKMSKeyAlias:
+    Type: String
+    Description: Alias name for the backend encryption KMS key in the automation account (without alias/ prefix)
+    AllowedPattern: '^[a-zA-Z0-9/_-]+$'
+    ConstraintDescription: Must be a valid KMS alias name
+  GitHubOrg:
+    Type: String
+    Description: GitHub organization or user name
+    AllowedPattern: '^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?$'
+    ConstraintDescription: Must be a valid GitHub organization or user name
+  GitHubRepoName:
+    Type: String
+    Description: GitHub repository name for this infrastructure
+    AllowedPattern: '^[a-zA-Z0-9._-]+$'
+    ConstraintDescription: Must be a valid GitHub repository name
+
+Resources:
+  # https://docs.github.com/en/actions/security-for-github-actions/security-hardening-your-deployments/configuring-openid-connect-in-amazon-web-services
+  GitHubOIDCProvider:
+    Type: AWS::IAM::OIDCProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList:
+        - sts.amazonaws.com
+      ThumbprintList:
+        - 7560D6F40FA55195F740EE2B1B7C0B4836CBE103
+
+  # Backend access role for infra-aws-org repository
+  # Allows GitHub Actions and SSO users to access OpenTofu state in the automation account
+  OpenTofuRemoteBackendAccessRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: OpenTofuRemoteBackendAccessRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !GetAtt GitHubOIDCProvider.Arn
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                token.actions.githubusercontent.com:sub: !Sub "repo:${GitHubOrg}/${GitHubRepoName}:ref:refs/heads/main"
+          - Effect: Allow
+            Principal:
+              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
+            Action: sts:AssumeRole
+            Condition:
+              ArnLike:
+                aws:PrincipalArn: !Sub "arn:aws:iam::${AWS::AccountId}:role/aws-reserved/sso.amazonaws.com/*/AWSReservedSSO_AdministratorAccess_*"
+      Tags:
+        - Key: Environment
+          Value: Production
+        - Key: Usage
+          Value: IAC-OpenTofu
+
+  OpenTofuRemoteBackendAccessRolePolicy:
+    Type: AWS::IAM::RolePolicy
+    Properties:
+      RoleName: !Ref OpenTofuRemoteBackendAccessRole
+      PolicyName: OpenTofuRemoteBackendAccessPolicy
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: S3ListBucket
+            Effect: Allow
+            Action: s3:ListBucket
+            Resource: !Sub "arn:aws:s3:::${OpenTofuRemoteBackendBucketName}"
+          - Sid: S3StateAccess
+            Effect: Allow
+            Action:
+              - s3:GetObject
+              - s3:PutObject
+            Resource: !Sub "arn:aws:s3:::${OpenTofuRemoteBackendBucketName}/opentofu-states/${GitHubRepoName}/*"
+          - Sid: DynamoDBLocking
+            Effect: Allow
+            Action:
+              - dynamodb:DescribeTable
+              - dynamodb:GetItem
+              - dynamodb:PutItem
+              - dynamodb:DeleteItem
+            Resource: !Sub "arn:aws:dynamodb:*:${AutomationAccountId}:table/${OpenTofuRemoteBackendDDBTableName}"
+          - Sid: KMSAccess
+            Effect: Allow
+            Action:
+              - kms:Decrypt
+              - kms:DescribeKey
+              - kms:Encrypt
+              - kms:GenerateDataKey*
+            Resource: !Sub "arn:aws:kms:*:${AutomationAccountId}:alias/${OpenTofuRemoteBackendKMSKeyAlias}"
+
+  # StackSet to deploy GitHub OIDC Provider to all member accounts in the Projects OU
+  GitHubOIDCProviderStackSet:
+    Type: AWS::CloudFormation::StackSet
+    Properties:
+      StackSetName: GitHubOIDCProvider
+      Description: Deploy GitHub OIDC Provider to member accounts for GitHub Actions authentication
+      PermissionModel: SERVICE_MANAGED
+      CallAs: SELF
+      Capabilities:
+        - CAPABILITY_IAM
+        - CAPABILITY_NAMED_IAM
+      AutoDeployment:
+        Enabled: true
+        RetainStacksOnAccountRemoval: false
+      ManagedExecution:
+        Active: true
+      StackInstancesGroup:
+        - DeploymentTargets:
+            OrganizationalUnitIds:
+              - !Ref AwsOrgOUIdProjects
+          Regions:
+            - !Ref AWS::Region
+      TemplateBody: |
+        AWSTemplateFormatVersion: '2010-09-09'
+        Description: GitHub OIDC Provider for GitHub Actions authentication
+
+        Resources:
+          GitHubOIDCProvider:
+            Type: AWS::IAM::OIDCProvider
+            Properties:
+              Url: https://token.actions.githubusercontent.com
+              ClientIdList:
+                - sts.amazonaws.com
+              ThumbprintList:
+                - 7560D6F40FA55195F740EE2B1B7C0B4836CBE103
+
+        Outputs:
+          GitHubOIDCProviderArn:
+            Description: ARN of the GitHub OIDC Provider
+            Value: !GetAtt GitHubOIDCProvider.Arn
+            Export:
+              Name: !Sub ${AWS::StackName}-GitHubOIDCProviderArn
+      Tags:
+        - Key: Environment
+          Value: Production
+        - Key: Usage
+          Value: IAC-OpenTofu
+
+Outputs:
+  GitHubOIDCProviderArn:
+    Description: ARN of the GitHub OIDC Provider in the management account
+    Value: !GetAtt GitHubOIDCProvider.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-GitHubOIDCProviderArn
+
+  OpenTofuRemoteBackendAccessRoleArn:
+    Description: ARN of the OpenTofu remote backend access role
+    Value: !GetAtt OpenTofuRemoteBackendAccessRole.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-OpenTofuRemoteBackendAccessRoleArn
+
+  GitHubOIDCProviderStackSetId:
+    Description: ID of the StackSet for deploying OIDC providers to member accounts
+    Value: !Ref GitHubOIDCProviderStackSet
+    Export:
+      Name: !Sub ${AWS::StackName}-GitHubOIDCProviderStackSetId
