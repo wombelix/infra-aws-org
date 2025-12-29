@@ -171,6 +171,7 @@ Resources:
                 "aws:PrincipalARN":
                   - "arn:aws:iam::*:role/AWSCloudFormationStackSetExecutionRole"
                   - "arn:aws:iam::*:role/CloudFormationExecutionRole"
+                  - "arn:aws:iam::*:role/aws-reserved/sso.amazonaws.com/*/AWSReservedSSO_AdministratorAccess_*"
                   - "arn:aws:sts::*:assumed-role/AWSReservedSSO_AdministratorAccess_*/*"
 
           # Prevent irreversible data lock-in actions
