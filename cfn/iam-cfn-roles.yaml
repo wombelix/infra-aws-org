@@ -12,7 +12,7 @@ Parameters:
     Default: "b01ca462-169e-42ce-a10c-ccb09a3ca0e7"
 
 Resources:
-  # Allows CloudFormation to create and manage SCPs, RCPs, and other org policies
+  # Allows CloudFormation to create and manage resources defined in the git sync stacks
   CloudFormationOrgRole:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
@@ -102,6 +102,51 @@ Resources:
                   - cloudformation:UpdateStack
                   - cloudformation:ValidateTemplate
                   - cloudformation:GetTemplateSummary
+                Resource: "*"
+              - Sid: CloudFormationStackSetManagement
+                Effect: Allow
+                Action:
+                  - cloudformation:CreateStackSet
+                  - cloudformation:DeleteStackSet
+                  - cloudformation:UpdateStackSet
+                  - cloudformation:DescribeStackSet
+                  - cloudformation:DescribeStackSetOperation
+                  - cloudformation:ListStackSetOperations
+                  - cloudformation:ListStackSetOperationResults
+                  - cloudformation:CreateStackInstances
+                  - cloudformation:DeleteStackInstances
+                  - cloudformation:UpdateStackInstances
+                  - cloudformation:DescribeStackInstance
+                  - cloudformation:ListStackInstances
+                  - cloudformation:TagResource
+                  - cloudformation:UntagResource
+                Resource: "*"
+              - Sid: IAMOIDCProviderManagement
+                Effect: Allow
+                Action:
+                  - iam:CreateOpenIDConnectProvider
+                  - iam:DeleteOpenIDConnectProvider
+                  - iam:GetOpenIDConnectProvider
+                  - iam:UpdateOpenIDConnectProviderThumbprint
+                  - iam:AddClientIDToOpenIDConnectProvider
+                  - iam:RemoveClientIDFromOpenIDConnectProvider
+                  - iam:TagOpenIDConnectProvider
+                  - iam:UntagOpenIDConnectProvider
+                Resource: "*"
+              - Sid: IAMRoleManagement
+                Effect: Allow
+                Action:
+                  - iam:CreateRole
+                  - iam:DeleteRole
+                  - iam:GetRole
+                  - iam:UpdateRole
+                  - iam:UpdateAssumeRolePolicy
+                  - iam:TagRole
+                  - iam:UntagRole
+                  - iam:ListRoleTags
+                  - iam:PutRolePolicy
+                  - iam:DeleteRolePolicy
+                  - iam:GetRolePolicy
                 Resource: "*"
 
   # Allows CodeConnections to sync Git repositories with CloudFormation stacks
