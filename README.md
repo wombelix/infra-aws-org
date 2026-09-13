@@ -6,8 +6,10 @@ SPDX-License-Identifier: Apache-2.0
 
 # Infrastructure AWS Organizations
 
-[![REUSE status](https://api.reuse.software/badge/git.sr.ht/~wombelix/infra-aws-org)](https://api.reuse.software/info/git.sr.ht/~wombelix/infra-aws-org)
-[![builds.sr.ht status](https://builds.sr.ht/~wombelix/infra-aws-org.svg)](https://builds.sr.ht/~wombelix/infra-aws-org?)
+<!-- markdownlint-disable MD013 -->
+[![REUSE status](https://api.reuse.software/badge/github.com/wombelix/infra-aws-org)](https://api.reuse.software/info/github.com/wombelix/infra-aws-org)
+[![Mirror](https://github.com/wombelix/infra-aws-org/actions/workflows/mirror.yml/badge.svg)](https://github.com/wombelix/infra-aws-org/actions/workflows/mirror.yml)
+<!-- markdownlint-enable MD013 -->
 
 ## Table of Contents
 
@@ -60,32 +62,24 @@ Create one stack per entry point file.
 ## Source
 
 The primary location is:
-[git.sr.ht/~wombelix/infra-aws-org](https://git.sr.ht/~wombelix/infra-aws-org)
+[github.com/wombelix/infra-aws-org](https://github.com/wombelix/infra-aws-org)
 
 Mirrors are available on
-[Codeberg](https://codeberg.org/wombelix/infra-aws-org),
-[Gitlab](https://gitlab.com/wombelix/infra-aws-org)
-and
-[GitHub](https://github.com/wombelix/infra-aws-org).
+[Codeberg](https://codeberg.org/wombelix/infra-aws-org) and
+[Gitlab](https://gitlab.com/wombelix/infra-aws-org).
 
 ## Contribute
 
-Please don't hesitate to provide feedback,
-open an issue, or create a Pull / Merge Request.
+Pick the platform you prefer and are most comfortable with.
 
-Just pick the workflow or platform you prefer and are most comfortable with.
-
-Feedback, bug reports, or patches sent to my sr.ht list
-[~wombelix/inbox@lists.sr.ht](https://lists.sr.ht/~wombelix/inbox) or via
-[Email and Instant Messaging](https://dominik.wombacher.cc/pages/contact.html)
-are also always welcome.
+Provide feedback, open an issue or create a pull / merge request.
 
 ## License
 
-Unless otherwise stated: `Apache-2.0`
+Unless otherwise stated: `Apache 2.0`
 
-All files contain license information either as
-`header comment` or `corresponding .license` file.
+All files contain license information either as a
+`header comment` or a `corresponding .license` file.
 
 [REUSE](https://reuse.software) from the [FSFE](https://fsfe.org/)
-implemented to verify license and copyright compliance.
+is implemented to verify license and copyright compliance.
