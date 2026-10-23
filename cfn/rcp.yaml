@@ -15,6 +15,9 @@ Parameters:
   GitHubRepo:
     Type: String
     Description: "GitHub repository allowed for OIDC (format: org/repo or org/* for all repos)"
+  GitHubRepoImmutable:
+    Type: String
+    Description: "GitHub repository allowed for OIDC, immutable ID format (format: org@org_id/repo@repo_id or org@org_id/* for all repos)"
 
 Resources:
   # RCP for security and compliance
@@ -131,7 +134,9 @@ Resources:
             Resource: '*'
             Condition:
              StringNotLike:
-               'token.actions.githubusercontent.com:sub': !Sub 'repo:${GitHubRepo}:*'
+               'token.actions.githubusercontent.com:sub':
+                 - !Sub 'repo:${GitHubRepo}:*'
+                 - !Sub 'repo:${GitHubRepoImmutable}:*'
       TargetIds:
         - !Ref OrganizationRootId
 

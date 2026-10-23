@@ -7,6 +7,7 @@ parameters:
   OrganizationId: o-37w8eaobo2
   OrganizationRootId: r-lp71
   GitHubRepo: wombelix/*
+  GitHubRepoImmutable: wombelix@16312366/*
 tags:
   Purpose: AWSOrg
   Lifecycle: Active
