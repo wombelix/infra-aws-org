@@ -166,6 +166,70 @@ Resources:
         - Key: Usage
           Value: IAC-OpenTofu
 
+  # StackSet to deploy <repo>-ProjectRole to single project accounts
+  # No auto deployment, git-repo-mgmt creates one stack instance per vended account
+  ProjectRoleStackSet:
+    Type: AWS::CloudFormation::StackSet
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      StackSetName: ProjectRole
+      Description: Deploy <repo>-ProjectRole to vended project accounts
+      PermissionModel: SERVICE_MANAGED
+      CallAs: SELF
+      Capabilities:
+        - CAPABILITY_NAMED_IAM
+      AutoDeployment:
+        Enabled: false
+      ManagedExecution:
+        Active: true
+      Parameters:
+        - ParameterKey: AutomationAccountId
+          ParameterValue: !Ref AutomationAccountId
+        # Placeholder, every stack instance overrides it with the repo name
+        - ParameterKey: RepoName
+          ParameterValue: override-per-instance
+      TemplateBody: |
+        AWSTemplateFormatVersion: '2010-09-09'
+        Description: Project role, assumable by the GitHubOIDC-<repo>-ResourceAccess role in the automation account
+
+        Parameters:
+          AutomationAccountId:
+            Type: String
+            AllowedPattern: '^\d{12}$'
+          RepoName:
+            Type: String
+            AllowedPattern: '^[a-zA-Z0-9._-]+$'
+
+        Resources:
+          ProjectRole:
+            Type: AWS::IAM::Role
+            Properties:
+              RoleName: !Sub "${RepoName}-ProjectRole"
+              AssumeRolePolicyDocument:
+                Version: '2012-10-17'
+                Statement:
+                  - Effect: Allow
+                    Principal:
+                      AWS: !Sub "arn:aws:iam::${AutomationAccountId}:root"
+                    Action: sts:AssumeRole
+                    Condition:
+                      ArnEquals:
+                        aws:PrincipalArn: !Sub "arn:aws:iam::${AutomationAccountId}:role/GitHubOIDC-${RepoName}-ResourceAccess"
+              ManagedPolicyArns:
+                - arn:aws:iam::aws:policy/AdministratorAccess
+              MaxSessionDuration: 3600
+
+        Outputs:
+          ProjectRoleArn:
+            Description: ARN of the project role
+            Value: !GetAtt ProjectRole.Arn
+      Tags:
+        - Key: Environment
+          Value: Production
+        - Key: Usage
+          Value: IAC-OpenTofu
+
 Outputs:
   GitHubOIDCProviderArn:
     Description: ARN of the GitHub OIDC Provider in the management account
@@ -184,3 +248,9 @@ Outputs:
     Value: !Ref GitHubOIDCProviderStackSet
     Export:
       Name: !Sub ${AWS::StackName}-GitHubOIDCProviderStackSetId
+
+  ProjectRoleStackSetId:
+    Description: ID of the StackSet for deploying project roles to vended accounts
+    Value: !Ref ProjectRoleStackSet
+    Export:
+      Name: !Sub ${AWS::StackName}-ProjectRoleStackSetId
