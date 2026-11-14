@@ -16,6 +16,26 @@ Parameters:
     Description: Organizational Unit ID for project accounts
     AllowedPattern: '^ou-[a-z0-9]{4,32}-[a-z0-9]{8,32}$'
     ConstraintDescription: Must be a valid OU ID (e.g., ou-xxxx-xxxxxxxx)
+  AwsOrgOUIdSuspended:
+    Type: String
+    Description: Organizational Unit ID for suspended accounts
+    AllowedPattern: '^ou-[a-z0-9]{4,32}-[a-z0-9]{8,32}$'
+    ConstraintDescription: Must be a valid OU ID (e.g., ou-xxxx-xxxxxxxx)
+  OrganizationId:
+    Type: String
+    Description: AWS Organizations ID
+    AllowedPattern: '^o-[a-z0-9]{10,32}$'
+    ConstraintDescription: Must be a valid Organization ID (e.g., o-xxxxxxxxxx)
+  OrganizationRootId:
+    Type: String
+    Description: AWS Organizations root ID
+    AllowedPattern: '^r-[a-z0-9]{4,32}$'
+    ConstraintDescription: Must be a valid root ID (e.g., r-xxxx)
+  GitRepoMgmtRoleName:
+    Type: String
+    Description: Name of the git-repo-mgmt role in the automation account
+    AllowedPattern: '^[a-zA-Z0-9+=,.@_-]+$'
+    ConstraintDescription: Must be a valid IAM role name
   OpenTofuRemoteBackendBucketName:
     Type: String
     Description: Name of the S3 bucket for OpenTofu state in the automation account
@@ -230,6 +250,100 @@ Resources:
         - Key: Usage
           Value: IAC-OpenTofu
 
+  # Account vending role for git-repo-mgmt
+  # Only GitRepoMgmtRole can assume it, the management account can revoke access here
+  AccountVendingRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: AccountVendingRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub "arn:aws:iam::${AutomationAccountId}:root"
+            Action: sts:AssumeRole
+            Condition:
+              ArnEquals:
+                aws:PrincipalArn: !Sub "arn:aws:iam::${AutomationAccountId}:role/${GitRepoMgmtRoleName}"
+      MaxSessionDuration: 3600
+      Policies:
+        - PolicyName: AccountVendingPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: CreateTaggedAccounts
+                Effect: Allow
+                Action: organizations:CreateAccount
+                Resource: '*'
+                Condition:
+                  StringEquals:
+                    aws:RequestTag/ManagedBy: git-repo-mgmt
+              - Sid: ReadAccounts
+                Effect: Allow
+                Action:
+                  - organizations:DescribeCreateAccountStatus
+                  - organizations:DescribeAccount
+                  - organizations:ListParents
+                  - organizations:ListTagsForResource
+                Resource: '*'
+              - Sid: ManageTaggedAccounts
+                Effect: Allow
+                Action:
+                  - organizations:MoveAccount
+                  - organizations:CloseAccount
+                  - organizations:TagResource
+                Resource: !Sub "arn:aws:organizations::${AWS::AccountId}:account/${OrganizationId}/*"
+                Condition:
+                  StringEquals:
+                    aws:ResourceTag/ManagedBy: git-repo-mgmt
+                  StringEqualsIfExists:
+                    aws:RequestTag/ManagedBy: git-repo-mgmt
+              - Sid: UntagTaggedAccountsExceptManagedBy
+                Effect: Allow
+                Action: organizations:UntagResource
+                Resource: !Sub "arn:aws:organizations::${AWS::AccountId}:account/${OrganizationId}/*"
+                Condition:
+                  StringEquals:
+                    aws:ResourceTag/ManagedBy: git-repo-mgmt
+                  ForAllValues:StringNotEquals:
+                    aws:TagKeys: ManagedBy
+              # MoveAccount also authorizes source and destination parent
+              - Sid: MoveAccountParents
+                Effect: Allow
+                Action: organizations:MoveAccount
+                Resource:
+                  - !Sub "arn:aws:organizations::${AWS::AccountId}:root/${OrganizationId}/${OrganizationRootId}"
+                  - !Sub "arn:aws:organizations::${AWS::AccountId}:ou/${OrganizationId}/${AwsOrgOUIdProjects}"
+                  - !Sub "arn:aws:organizations::${AWS::AccountId}:ou/${OrganizationId}/${AwsOrgOUIdSuspended}"
+              - Sid: ProjectRoleStackInstances
+                Effect: Allow
+                Action:
+                  - cloudformation:CreateStackInstances
+                  - cloudformation:UpdateStackInstances
+                  - cloudformation:DeleteStackInstances
+                Resource:
+                  - !Sub "arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stackset/ProjectRole:*"
+                  - !Sub "arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:type/resource/AWS-IAM-Role"
+                  - !Sub "arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stackset-target/ProjectRole:*/${AwsOrgOUIdProjects}"
+                  # Exactly 12 characters, matches account ID targets only, OU and root IDs are longer or shorter
+                  - !Sub "arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stackset-target/ProjectRole:*/????????????"
+                Condition:
+                  ForAllValues:StringEquals:
+                    cloudformation:TargetRegion: !Ref AWS::Region
+              - Sid: ReadProjectRoleStackInstances
+                Effect: Allow
+                Action:
+                  - cloudformation:DescribeStackInstance
+                  - cloudformation:ListStackInstances
+                  - cloudformation:DescribeStackSetOperation
+                Resource: !Sub "arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stackset/ProjectRole:*"
+      Tags:
+        - Key: Environment
+          Value: Production
+        - Key: Usage
+          Value: IAC-OpenTofu
+
 Outputs:
   GitHubOIDCProviderArn:
     Description: ARN of the GitHub OIDC Provider in the management account
@@ -254,3 +368,9 @@ Outputs:
     Value: !Ref ProjectRoleStackSet
     Export:
       Name: !Sub ${AWS::StackName}-ProjectRoleStackSetId
+
+  AccountVendingRoleArn:
+    Description: ARN of the account vending role for git-repo-mgmt
+    Value: !GetAtt AccountVendingRole.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-AccountVendingRoleArn
