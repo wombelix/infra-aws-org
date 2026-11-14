@@ -9,6 +9,12 @@ Parameters:
   OrganizationRootId:
     Type: String
     Description: "AWS Organizations root ID (e.g., r-xxxx)"
+  AwsOrgOUIdProjects:
+    Type: String
+    Description: "Organizational Unit ID for project accounts (e.g., ou-xxxx-xxxxxxxx)"
+  AwsOrgOUIdSuspended:
+    Type: String
+    Description: "Organizational Unit ID for suspended accounts (e.g., ou-xxxx-xxxxxxxx)"
 
 Resources:
   ServiceControlPolicies:
@@ -174,9 +180,87 @@ Resources:
       TargetIds:
         - !Ref OrganizationRootId
 
+  # Protect the vended baseline in project accounts against changes by the project itself
+  # StackSets manages these roles through stacksets-exec-* roles, created by a service-linked role that SCPs don't affect
+  ProjectsServiceControlPolicies:
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Type: AWS::Organizations::Policy
+    Properties:
+      Type: SERVICE_CONTROL_POLICY
+      Name: ProjectsServiceControlPolicies
+      Description: Protect vended baseline roles and the GitHub OIDC provider in project accounts
+      Content:
+        Version: 2012-10-17
+        Statement:
+          - Sid: ProtectVendedBaseline
+            Effect: Deny
+            Action:
+              - 'iam:CreateRole'
+              - 'iam:UpdateAssumeRolePolicy'
+              - 'iam:PutRolePolicy'
+              - 'iam:DeleteRolePolicy'
+              - 'iam:AttachRolePolicy'
+              - 'iam:DetachRolePolicy'
+              - 'iam:PutRolePermissionsBoundary'
+              - 'iam:DeleteRolePermissionsBoundary'
+              - 'iam:UpdateRole'
+              - 'iam:DeleteRole'
+              - 'iam:TagRole'
+              - 'iam:UntagRole'
+              - 'iam:CreateOpenIDConnectProvider'
+              - 'iam:DeleteOpenIDConnectProvider'
+              - 'iam:UpdateOpenIDConnectProviderThumbprint'
+              - 'iam:AddClientIDToOpenIDConnectProvider'
+              - 'iam:RemoveClientIDFromOpenIDConnectProvider'
+            Resource:
+              - 'arn:aws:iam::*:role/*-ProjectRole'
+              - 'arn:aws:iam::*:role/stacksets-exec-*'
+              - 'arn:aws:iam::*:role/OrganizationAccountAccessRole'
+              - 'arn:aws:iam::*:oidc-provider/token.actions.githubusercontent.com'
+            Condition:
+              ArnNotLike:
+                'aws:PrincipalArn': 'arn:aws:iam::*:role/stacksets-exec-*'
+      TargetIds:
+        - !Ref AwsOrgOUIdProjects
+
+  # Freeze parked accounts, only StackSets can still remove its stack instances
+  SuspendedServiceControlPolicies:
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Type: AWS::Organizations::Policy
+    Properties:
+      Type: SERVICE_CONTROL_POLICY
+      Name: SuspendedServiceControlPolicies
+      Description: Deny all actions in suspended accounts
+      Content:
+        Version: 2012-10-17
+        Statement:
+          - Sid: DenyAll
+            Effect: Deny
+            Action: '*'
+            Resource: '*'
+            Condition:
+              ArnNotLike:
+                'aws:PrincipalArn': 'arn:aws:iam::*:role/stacksets-exec-*'
+      TargetIds:
+        - !Ref AwsOrgOUIdSuspended
+
 Outputs:
   ServiceControlPoliciesPolicyId:
     Description: Global SCP Policy ID
     Value: !Ref ServiceControlPolicies
     Export:
       Name: !Sub "${AWS::StackName}-ServiceControlPolicies-PolicyId"
+
+  ProjectsServiceControlPoliciesPolicyId:
+    Description: Projects OU SCP Policy ID
+    Value: !Ref ProjectsServiceControlPolicies
+    Export:
+      Name: !Sub "${AWS::StackName}-ProjectsServiceControlPolicies-PolicyId"
+
+  SuspendedServiceControlPoliciesPolicyId:
+    Description: Suspended OU SCP Policy ID
+    Value: !Ref SuspendedServiceControlPolicies
+    Export:
+      Name: !Sub "${AWS::StackName}-SuspendedServiceControlPolicies-PolicyId"

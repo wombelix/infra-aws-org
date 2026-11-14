@@ -5,6 +5,8 @@
 template-file-path: cfn/scp.yaml
 parameters:
   OrganizationRootId: r-lp71
+  AwsOrgOUIdProjects: ou-lp71-146074dn
+  AwsOrgOUIdSuspended: ou-lp71-1e888z5z
 tags:
   Purpose: AWSOrg
   Lifecycle: Active
