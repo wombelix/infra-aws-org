@@ -126,6 +126,18 @@ Resources:
       Content:
         Version: 2012-10-17
         Statement:
+          # Only GitHub and our own issuers on oidc.wombacher.dev, one path per issuer
+          - Sid: ApprovedProviders
+            Effect: Deny
+            Principal: '*'
+            Action:
+              - 'sts:AssumeRoleWithWebIdentity'
+            Resource: '*'
+            Condition:
+             StringNotLike:
+               'aws:FederatedProvider':
+                 - 'arn:aws:iam::*:oidc-provider/token.actions.githubusercontent.com'
+                 - 'arn:aws:iam::*:oidc-provider/oidc.wombacher.dev/*'
           - Sid: GitHubRepo
             Effect: Deny
             Principal: '*'
@@ -133,6 +145,8 @@ Resources:
               - 'sts:AssumeRoleWithWebIdentity'
             Resource: '*'
             Condition:
+             StringLike:
+               'aws:FederatedProvider': 'arn:aws:iam::*:oidc-provider/token.actions.githubusercontent.com'
              StringNotLike:
                'token.actions.githubusercontent.com:sub':
                  - !Sub 'repo:${GitHubRepo}:*'
