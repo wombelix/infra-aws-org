@@ -58,6 +58,30 @@ Use the Role ARN from `task iam-cfn-roles:deploy` output as IAM execution role.
 Point to the repo mirror on GitHub and each `stack-deployment-X.yaml` file.
 Create one stack per entry point file.
 
+### Account vending
+
+git-repo-mgmt creates one AWS account per repository that sets
+`enable_aws_account`. This repo provides the parts in the management account,
+all in `cfn/iac.yaml` and `cfn/scp.yaml`:
+
+* `AccountVendingRole` - only the git-repo-mgmt role in the automation account
+  can assume it. It creates accounts with the tag `ManagedBy: git-repo-mgmt`
+  and can move, tag and close only accounts with that tag. It also manages
+  the stack instances of the `ProjectRole` StackSet.
+* `ProjectRole` StackSet - creates `<repo>-ProjectRole` with
+  `AdministratorAccess` in a vended account. Only
+  `GitHubOIDC-<repo>-ResourceAccess` in the automation account can assume it.
+* `GitHubOIDCProvider` StackSet - deploys the GitHub OIDC provider to every
+  account in the Projects OU.
+* Projects OU SCP - only StackSets can change `*-ProjectRole`,
+  `OrganizationAccountAccessRole`, the StackSet execution roles and the
+  GitHub OIDC provider.
+* Suspended OU SCP - denies all actions in parked accounts, except for the
+  StackSet execution roles.
+
+To revoke git-repo-mgmt's access to the organization, change or delete
+`AccountVendingRole`.
+
 ## Source
 
 The primary location is:
