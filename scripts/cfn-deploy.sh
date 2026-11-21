@@ -61,8 +61,8 @@ cfn create-change-set \
   --capabilities CAPABILITY_NAMED_IAM \
   "${extra_args[@]}" > /dev/null
 
-# The waiter also fails when the change set has no changes, the status below decides
-cfn wait change-set-create-complete --stack-name "$stack" --change-set-name "$change_set" || true
+# The waiter also fails when the change set has no changes, the status below decides and reports errors
+cfn wait change-set-create-complete --stack-name "$stack" --change-set-name "$change_set" 2> /dev/null || true
 
 change_set_status=$(cfn describe-change-set --stack-name "$stack" --change-set-name "$change_set" --query Status --output text)
 change_set_reason=$(cfn describe-change-set --stack-name "$stack" --change-set-name "$change_set" --query StatusReason --output text)
