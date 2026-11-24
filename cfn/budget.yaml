@@ -6,9 +6,6 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: "Budget and Cost Anomaly Detection for AWS Organizations"
 
 Parameters:
-  AlertSnsTopicArn:
-    Type: String
-    Description: SNS topic ARN for budget and cost anomaly alerts
   AlertEmail:
     Type: String
     Description: Email address that receives budget and cost anomaly alerts
@@ -29,26 +26,21 @@ Resources:
     Properties:
       TopicArn: !Ref AlertSnsTopic
       PolicyDocument:
-        Version: "2008-10-17"
-        Id: __default_policy_ID
+        Version: "2012-10-17"
         Statement:
-          - Sid: __default_statement_ID
+          # https://docs.aws.amazon.com/cost-management/latest/userguide/budgets-sns-policy.html
+          - Sid: AWSBudgetsSNSPublishingPermissions
             Effect: Allow
             Principal:
-              AWS: "*"
-            Action:
-              - SNS:GetTopicAttributes
-              - SNS:SetTopicAttributes
-              - SNS:AddPermission
-              - SNS:RemovePermission
-              - SNS:DeleteTopic
-              - SNS:Subscribe
-              - SNS:ListSubscriptionsByTopic
-              - SNS:Publish
+              Service: budgets.amazonaws.com
+            Action: SNS:Publish
             Resource: !Ref AlertSnsTopic
             Condition:
               StringEquals:
-                AWS:SourceOwner: !Ref AWS::AccountId
+                aws:SourceAccount: !Ref AWS::AccountId
+              ArnLike:
+                aws:SourceArn: !Sub "arn:aws:budgets::${AWS::AccountId}:*"
+          # https://docs.aws.amazon.com/cost-management/latest/userguide/ad-SNS.html
           - Sid: AWSAnomalyDetectionSNSPublishingPermissions
             Effect: Allow
             Principal:
@@ -90,7 +82,7 @@ Resources:
             ThresholdType: PERCENTAGE
           Subscribers:
             - SubscriptionType: SNS
-              Address: !Ref AlertSnsTopicArn
+              Address: !Ref AlertSnsTopic
         - Notification:
             NotificationType: ACTUAL
             ComparisonOperator: GREATER_THAN
@@ -98,7 +90,7 @@ Resources:
             ThresholdType: PERCENTAGE
           Subscribers:
             - SubscriptionType: SNS
-              Address: !Ref AlertSnsTopicArn
+              Address: !Ref AlertSnsTopic
         - Notification:
             NotificationType: FORECASTED
             ComparisonOperator: GREATER_THAN
@@ -106,7 +98,7 @@ Resources:
             ThresholdType: PERCENTAGE
           Subscribers:
             - SubscriptionType: SNS
-              Address: !Ref AlertSnsTopicArn
+              Address: !Ref AlertSnsTopic
         - Notification:
             NotificationType: ACTUAL
             ComparisonOperator: GREATER_THAN
@@ -114,7 +106,7 @@ Resources:
             ThresholdType: PERCENTAGE
           Subscribers:
             - SubscriptionType: SNS
-              Address: !Ref AlertSnsTopicArn
+              Address: !Ref AlertSnsTopic
 
   # Cost anomaly detection for all AWS services
   # Why: Free ML-powered anomaly detection to catch unexpected cost spikes
@@ -140,7 +132,7 @@ Resources:
         - !Ref CostAnomalyDefaultServicesMonitor
       Subscribers:
         - Type: SNS
-          Address: !Ref AlertSnsTopicArn
+          Address: !Ref AlertSnsTopic
       ThresholdExpression: |
         {
           "Dimensions": {
