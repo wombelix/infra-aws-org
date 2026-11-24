@@ -22,7 +22,7 @@ tasks:
   # Import needs a change set of type IMPORT, which cfn-deploy.sh does not create
   #
   # If import fails mid-way, delete the stuck stack and retry.
-  # Example: aws cloudformation delete-stack --stack-name infra-aws-org-iam-cfn-roles --region eu-central-1
+  # Example: aws cloudformation delete-stack --stack-name iam-cfn-roles --region eu-central-1
   iam-cfn-roles:import:
     desc: Import existing IAM roles into CloudFormation stack (one-time operation)
     cmds:
