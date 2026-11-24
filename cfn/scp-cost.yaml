@@ -28,7 +28,14 @@ Resources:
             Effect: Deny
             NotAction:
               - 'cloudformation:*'
+              # Event history and trail status only, trails and Lake have costs
+              - 'cloudtrail:Describe*'
+              - 'cloudtrail:Get*'
+              - 'cloudtrail:List*'
+              - 'cloudtrail:LookupEvents'
               - 'codeconnections:*'
+              # Old prefix of codeconnections, some actions still authorize with it
+              - 'codestar-connections:*'
               - 'dynamodb:*'
               - 'events:*'
               - 'health:*'
