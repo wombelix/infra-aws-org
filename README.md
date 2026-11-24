@@ -54,9 +54,42 @@ Run `task` to list all available tasks.
 ### Git Sync Stacks
 
 Create CloudFormation stacks with Sync from Git through the AWS console.
-Use the Role ARN from `task iam-cfn-roles:deploy` output as IAM execution role.
 Point to the repo mirror on GitHub and each `stack-deployment-X.yaml` file.
-Create one stack per entry point file.
+Create one stack per entry point file. The console asks for two roles:
+
+* `CustomerServiceRoleForCloudformationInfraAWSOrgGitSync` -
+  IAM role for Git sync
+* `CustomerServiceRoleForCloudformationInfraAWSOrg` -
+  IAM execution role
+
+`task iam-cfn-roles:deploy` prints both ARNs. A deploy without changes prints
+no ARNs. In that case, list them with:
+
+```bash
+aws cloudformation describe-stacks \
+  --stack-name iam-cfn-roles \
+  --region eu-central-1 \
+  --query 'Stacks[0].Outputs[].[OutputKey,OutputValue]' \
+  --output table \
+  --no-cli-pager
+```
+
+### Stacks
+
+* `stack-deployment-budget.yaml` - monthly cost budget and Cost Anomaly
+  Detection, alerts go to an SNS topic
+* `stack-deployment-iac.yaml` - GitHub OIDC provider and
+  `OpenTofuRemoteBackendAccessRole` in the management account, plus the
+  account vending parts below
+* `stack-deployment-policies.yaml` - tag policy, AI services opt-out, chatbot
+  policy and EC2 declarative policy on the root
+* `stack-deployment-rcp.yaml` - RCPs on the root: secure transport,
+  encryption, org-only access, confused deputy protection and approved OIDC
+  providers only
+* `stack-deployment-scp.yaml` - root SCP with EU regions only, root user
+  limits and data lock-in denies, plus the Projects and Suspended OU SCPs
+* `stack-deployment-scp-cost.yaml` - root SCP with a service allow list and
+  denies for costly actions
 
 ### Account vending
 
@@ -66,8 +99,9 @@ all in `cfn/iac.yaml` and `cfn/scp.yaml`:
 
 * `AccountVendingRole` - only the git-repo-mgmt role in the automation account
   can assume it. It creates accounts with the tag `ManagedBy: git-repo-mgmt`
-  and can move, tag and close only accounts with that tag. It also manages
-  the stack instances of the `ProjectRole` StackSet.
+  and can move, tag, untag and close only accounts with that tag. It cannot
+  remove the `ManagedBy` tag. It also manages the stack instances of the
+  `ProjectRole` StackSet.
 * `ProjectRole` StackSet - creates `<repo>-ProjectRole` with
   `AdministratorAccess` in a vended account. Only
   `GitHubOIDC-<repo>-ResourceAccess` in the automation account can assume it.
