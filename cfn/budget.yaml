@@ -9,8 +9,65 @@ Parameters:
   AlertSnsTopicArn:
     Type: String
     Description: SNS topic ARN for budget and cost anomaly alerts
+  AlertEmail:
+    Type: String
+    Description: Email address that receives budget and cost anomaly alerts
 
 Resources:
+  # Topic for budget and cost anomaly alerts, created in the console and imported
+  AlertSnsTopic:
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: Notifications
+
+  AlertSnsTopicPolicy:
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Type: AWS::SNS::TopicInlinePolicy
+    Properties:
+      TopicArn: !Ref AlertSnsTopic
+      PolicyDocument:
+        Version: "2008-10-17"
+        Id: __default_policy_ID
+        Statement:
+          - Sid: __default_statement_ID
+            Effect: Allow
+            Principal:
+              AWS: "*"
+            Action:
+              - SNS:GetTopicAttributes
+              - SNS:SetTopicAttributes
+              - SNS:AddPermission
+              - SNS:RemovePermission
+              - SNS:DeleteTopic
+              - SNS:Subscribe
+              - SNS:ListSubscriptionsByTopic
+              - SNS:Publish
+            Resource: !Ref AlertSnsTopic
+            Condition:
+              StringEquals:
+                AWS:SourceOwner: !Ref AWS::AccountId
+          - Sid: AWSAnomalyDetectionSNSPublishingPermissions
+            Effect: Allow
+            Principal:
+              Service: costalerts.amazonaws.com
+            Action: SNS:Publish
+            Resource: !Ref AlertSnsTopic
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+
+  AlertEmailSubscription:
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref AlertSnsTopic
+      Protocol: email
+      Endpoint: !Ref AlertEmail
+
   # Monthly cost budget with alerts at 75% and 100% thresholds
   # Why: Proactive cost monitoring to prevent billing surprises
   MonthlyCostBudget:
