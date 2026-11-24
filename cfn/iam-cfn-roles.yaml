@@ -148,6 +148,24 @@ Resources:
                   - iam:DeleteRolePolicy
                   - iam:GetRolePolicy
                 Resource: "*"
+              - Sid: SNSTopicManagement
+                Effect: Allow
+                Action:
+                  - sns:CreateTopic
+                  - sns:DeleteTopic
+                  - sns:GetTopicAttributes
+                  - sns:SetTopicAttributes
+                  - sns:GetDataProtectionPolicy
+                  - sns:PutDataProtectionPolicy
+                  - sns:ListSubscriptionsByTopic
+                  - sns:ListTagsForResource
+                  - sns:TagResource
+                  - sns:UntagResource
+                  - sns:Subscribe
+                  - sns:Unsubscribe
+                  - sns:GetSubscriptionAttributes
+                  - sns:SetSubscriptionAttributes
+                Resource: "*"
 
   # Allows CodeConnections to sync Git repositories with CloudFormation stacks
   CloudFormationGitSyncRole:
