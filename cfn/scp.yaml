@@ -131,6 +131,31 @@ Resources:
               - 'iam:UpdateAccessKey'
             Resource: '*'
 
+          # Based on the AWS sample restrict_idp_configurations_scp.json, without the OIDC actions
+          # OIDC providers are deployed by CloudFormation and StackSets
+          # Identity Center manages its AWSSSO_* SAML providers with a service-linked role, SCPs don't apply
+          - Sid: PreventIdPTrustModifications
+            Effect: Deny
+            Action:
+              - 'iam:CreateSAMLProvider'
+              - 'iam:DeleteSAMLProvider'
+              - 'iam:TagSAMLProvider'
+              - 'iam:UntagSAMLProvider'
+              - 'iam:UpdateSAMLProvider'
+              - 'rolesanywhere:CreateTrustAnchor'
+              - 'rolesanywhere:DeleteTrustAnchor'
+              - 'rolesanywhere:EnableTrustAnchor'
+              - 'rolesanywhere:DisableTrustAnchor'
+              - 'rolesanywhere:UpdateTrustAnchor'
+              - 'rolesanywhere:EnableCrl'
+              - 'rolesanywhere:DeleteCrl'
+              - 'rolesanywhere:DisableCrl'
+              - 'rolesanywhere:ImportCrl'
+              - 'rolesanywhere:UpdateCrl'
+              - 'rolesanywhere:TagResource'
+              - 'rolesanywhere:UntagResource'
+            Resource: '*'
+
           - Sid: DenyS3PutAccountPublicAccessBlockIfNotStrict
             Effect: Deny
             Action: "s3:PutAccountPublicAccessBlock"
