@@ -76,8 +76,9 @@ aws cloudformation describe-stacks \
 
 ### Stacks
 
-* `stack-deployment-budget.yaml` - monthly cost budget and Cost Anomaly
-  Detection, alerts go to an SNS topic
+* `stack-deployment-budget.yaml` - monthly cost budget, Cost Anomaly
+  Detection and the SNS topic `Notifications` with an email subscription for
+  their alerts
 * `stack-deployment-iac.yaml` - GitHub OIDC provider and
   `OpenTofuRemoteBackendAccessRole` in the management account, plus the
   account vending parts below
@@ -90,6 +91,34 @@ aws cloudformation describe-stacks \
   limits and data lock-in denies, plus the Projects and Suspended OU SCPs
 * `stack-deployment-scp-cost.yaml` - root SCP with a service allow list and
   denies for costly actions
+
+### Import existing resources
+
+Git sync creates no import change sets. Import a resource with the AWS CLI:
+
+1. Add the resource to the template with `DeletionPolicy: Retain`. Commit, but
+   don't push yet.
+2. Create a change set of type `IMPORT` for the stack. Review it, then
+   execute it.
+3. Push. Git sync blocks the stack, because something else changed it.
+4. Find the blocker and resolve it:
+
+   ```bash
+   aws codeconnections get-sync-blocker-summary \
+     --resource-name <stack> \
+     --sync-type CFN_STACK_SYNC \
+     --region eu-central-1 \
+     --no-cli-pager
+   aws codeconnections update-sync-blocker \
+     --id <blocker-id> \
+     --resource-name <stack> \
+     --sync-type CFN_STACK_SYNC \
+     --resolved-reason "<reason>" \
+     --region eu-central-1 \
+     --no-cli-pager
+   ```
+
+5. Choose **Retry latest commit** in the Git sync tab of the stack.
 
 ### Account vending
 
